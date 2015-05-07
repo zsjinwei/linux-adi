@@ -553,9 +553,10 @@ void iio_disable_all_buffers(struct iio_dev *indio_dev)
 			&indio_dev->buffer_list, buffer_list)
 		iio_buffer_deactivate(buffer);
 
-	indio_dev->currentmode = INDIO_DIRECT_MODE;
 	if (indio_dev->setup_ops->postdisable)
 		indio_dev->setup_ops->postdisable(indio_dev);
+
+	indio_dev->currentmode = INDIO_DIRECT_MODE;
 
 	if (indio_dev->available_scan_masks == NULL)
 		kfree(indio_dev->active_scan_mask);
@@ -625,12 +626,14 @@ static int __iio_update_buffers(struct iio_dev *indio_dev,
 			if (ret)
 				return ret;
 		}
-		indio_dev->currentmode = INDIO_DIRECT_MODE;
+
 		if (indio_dev->setup_ops->postdisable) {
 			ret = indio_dev->setup_ops->postdisable(indio_dev);
 			if (ret)
 				return ret;
 		}
+
+		indio_dev->currentmode = INDIO_DIRECT_MODE;
 	}
 	/* Keep a copy of current setup to allow roll back */
 	old_mask = indio_dev->active_scan_mask;
@@ -688,6 +691,21 @@ static int __iio_update_buffers(struct iio_dev *indio_dev,
 		indio_dev->active_scan_mask = compound_mask;
 	}
 
+	/* Definitely possible for devices to support both of these. */
+	if ((indio_dev->modes & INDIO_BUFFER_TRIGGERED) && indio_dev->trig) {
+		indio_dev->currentmode = INDIO_BUFFER_TRIGGERED;
+	} else if (indio_dev->modes & INDIO_BUFFER_HARDWARE) {
+		indio_dev->currentmode = INDIO_BUFFER_HARDWARE;
+	} else if (indio_dev->modes & INDIO_BUFFER_SOFTWARE) {
+		indio_dev->currentmode = INDIO_BUFFER_SOFTWARE;
+	} else { /* Should never be reached */
+		/* Can only occur on first buffer */
+		if (indio_dev->modes & INDIO_BUFFER_TRIGGERED)
+			dev_dbg(&indio_dev->dev, "Buffer not started: no trigger\n");
+		ret = -EINVAL;
+		goto error_remove_inserted;
+	}
+
 	iio_update_demux(indio_dev);
 
 	/* Wind up again */
@@ -714,30 +732,13 @@ static int __iio_update_buffers(struct iio_dev *indio_dev,
 			goto error_run_postdisable;
 		}
 	}
-	/* Definitely possible for devices to support both of these. */
-	if ((indio_dev->modes & INDIO_BUFFER_TRIGGERED) && indio_dev->trig) {
-		indio_dev->currentmode = INDIO_BUFFER_TRIGGERED;
-	} else if (indio_dev->modes & INDIO_BUFFER_HARDWARE) {
-		indio_dev->currentmode = INDIO_BUFFER_HARDWARE;
-	} else if (indio_dev->modes & INDIO_BUFFER_SOFTWARE) {
-		indio_dev->currentmode = INDIO_BUFFER_SOFTWARE;
-	} else { /* Should never be reached */
-		/* Can only occur on first buffer */
-		if (indio_dev->modes & INDIO_BUFFER_TRIGGERED)
-			dev_dbg(&indio_dev->dev, "Buffer not started: no trigger\n");
-		ret = -EINVAL;
-		goto error_run_postdisable;
-	}
 
 	if (indio_dev->setup_ops->postenable) {
 		ret = indio_dev->setup_ops->postenable(indio_dev);
 		if (ret) {
 			dev_dbg(&indio_dev->dev,
 			       "Buffer not started: postenable failed (%d)\n", ret);
-			indio_dev->currentmode = INDIO_DIRECT_MODE;
-			if (indio_dev->setup_ops->postdisable)
-				indio_dev->setup_ops->postdisable(indio_dev);
-			goto error_disable_all_buffers;
+			goto error_run_postdisable;
 		}
 	}
 
@@ -745,12 +746,11 @@ static int __iio_update_buffers(struct iio_dev *indio_dev,
 
 	return success;
 
-error_disable_all_buffers:
-	indio_dev->currentmode = INDIO_DIRECT_MODE;
 error_run_postdisable:
 	if (indio_dev->setup_ops->postdisable)
 		indio_dev->setup_ops->postdisable(indio_dev);
 error_remove_inserted:
+	indio_dev->currentmode = INDIO_DIRECT_MODE;
 	if (insert_buffer)
 		iio_buffer_deactivate(insert_buffer);
 	iio_free_scan_mask(indio_dev, indio_dev->active_scan_mask);
