@@ -60,6 +60,62 @@
 #define CTRL_CR_LSB_FIRST		(1<<1)
 #define CTRL_CR_SDO_ACTIVE		(1<<0)
 
+/**
+ * /sys/bus/iio/devices/.../out_altvoltageX_deltafrequency (just for ad9854)
+ */
+
+#define IIO_DEV_ATTR_DELTAFREQ(_channel, _mode, _show, _store, _addr)	\
+	IIO_DEVICE_ATTR(out_altvoltage##_channel##_frequencysymbol,	\
+			_mode, _show, _store, _addr)
+
+/**
+ * /sys/bus/iio/devices/.../out_altvoltageX_updateclk (just for ad9854)
+ */
+
+#define IIO_DEV_ATTR_UPDATECLK(_channel, _mode, _show, _store, _addr)	\
+	IIO_DEVICE_ATTR(out_altvoltage##_channel##_updateclk,	\
+			_mode, _show, _store, _addr)
+
+/**
+ * /sys/bus/iio/devices/.../out_altvoltageX_ramprateclk (just for ad9854)
+ */
+
+#define IIO_DEV_ATTR_RAMPRATECLK(_channel, _mode, _show, _store, _addr)	\
+	IIO_DEVICE_ATTR(out_altvoltage##_channel##_ramprateclk,	\
+			_mode, _show, _store, _addr)
+
+/**
+ * /sys/bus/iio/devices/.../out_altvoltageX_osk_imulti (just for ad9854)
+ */
+
+#define IIO_DEV_ATTR_OSK_IMULTI(_channel, _mode, _show, _store, _addr)	\
+	IIO_DEVICE_ATTR(out_altvoltage##_channel##_osk_imulti,	\
+			_mode, _show, _store, _addr)
+
+/**
+ * /sys/bus/iio/devices/.../out_altvoltageX_osk_qmulti (just for ad9854)
+ */
+
+#define IIO_DEV_ATTR_OSK_IMULTI(_channel, _mode, _show, _store, _addr)	\
+	IIO_DEVICE_ATTR(out_altvoltage##_channel##_osk_qmulti,	\
+			_mode, _show, _store, _addr)
+
+/**
+ * /sys/bus/iio/devices/.../out_altvoltageX_osk_ramprate (just for ad9854)
+ */
+
+#define IIO_DEV_ATTR_OSK_IMULTI(_channel, _mode, _show, _store, _addr)	\
+	IIO_DEVICE_ATTR(out_altvoltage##_channel##_osk_ramprate,	\
+			_mode, _show, _store, _addr)
+
+/**
+ * /sys/bus/iio/devices/.../out_altvoltageX_qdac (just for ad9854)
+ */
+
+#define IIO_DEV_ATTR_OSK_IMULTI(_channel, _mode, _show, _store, _addr)	\
+	IIO_DEVICE_ATTR(out_altvoltage##_channel##_qdac,	\
+			_mode, _show, _store, _addr)
+
 struct ad9854_ser_reg
 {
 	char reg_addr;
