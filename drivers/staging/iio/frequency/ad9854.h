@@ -25,6 +25,11 @@
 #define AD9854_REG_SER_OUTPUT_RAMP_RATE		0x0A
 #define AD9854_REG_SER_QDAC		0x0B
 
+#define AD9854_PHASE_SYM	0x30
+#define AD9854_FREQ_SYM		0x31
+#define AD9854_PINCTRL_EN	0x32
+#define AD9854_OUTPUT_EN	0x33
+
 /* Instruction byte */
 #define AD9854_INST_R		(1<<7)
 #define AD9854_INST_W		(0<<7)
@@ -34,12 +39,12 @@
 /* control reg bits(31:24) */
 #define CTRL_CR_COMP_PU		(1<<4)
 #define CTRL_CR_QDAC_PD		(1<<2)
-#define CTRL_CR_QDAC_PD		(1<<1)
+#define CTRL_CR_DAC_PD		(1<<1)
 #define CTRL_CR_DIG_PD		(1<<0)
 /* control reg bits(24:16) */
 #define CTRL_CR_PLL_RANGE		(1<<6)
 #define CTRL_CR_BYPASS_PLL		(1<<5)
-#define CTRL_CR_REF_MULT4		(1<<4)
+#define CTRL_CR_REF_MULT_4		(1<<4)
 #define CTRL_CR_REF_MULT_3		(1<<3)
 #define CTRL_CR_REF_MULT_2		(1<<2)
 #define CTRL_CR_REF_MULT_1		(1<<1)
@@ -96,7 +101,7 @@
  * /sys/bus/iio/devices/.../out_altvoltageX_osk_qmulti (just for ad9854)
  */
 
-#define IIO_DEV_ATTR_OSK_IMULTI(_channel, _mode, _show, _store, _addr)	\
+#define IIO_DEV_ATTR_OSK_QMULTI(_channel, _mode, _show, _store, _addr)	\
 	IIO_DEVICE_ATTR(out_altvoltage##_channel##_osk_qmulti,	\
 			_mode, _show, _store, _addr)
 
@@ -104,7 +109,7 @@
  * /sys/bus/iio/devices/.../out_altvoltageX_osk_ramprate (just for ad9854)
  */
 
-#define IIO_DEV_ATTR_OSK_IMULTI(_channel, _mode, _show, _store, _addr)	\
+#define IIO_DEV_ATTR_OSK_RAMPRATE(_channel, _mode, _show, _store, _addr)	\
 	IIO_DEVICE_ATTR(out_altvoltage##_channel##_osk_ramprate,	\
 			_mode, _show, _store, _addr)
 
@@ -112,15 +117,15 @@
  * /sys/bus/iio/devices/.../out_altvoltageX_qdac (just for ad9854)
  */
 
-#define IIO_DEV_ATTR_OSK_IMULTI(_channel, _mode, _show, _store, _addr)	\
+#define IIO_DEV_ATTR_QDAC(_channel, _mode, _show, _store, _addr)	\
 	IIO_DEVICE_ATTR(out_altvoltage##_channel##_qdac,	\
 			_mode, _show, _store, _addr)
 
 struct ad9854_ser_reg
 {
-	char reg_addr;
+	unsigned int reg_addr;
 	unsigned int reg_len;
-	char reg_val[6];
+	unsigned long long reg_val;
 };
 
 struct ad9854_ser_reg ad9854_ser_reg_tbl[AD9854_REG_SER_SIZE]
@@ -128,78 +133,73 @@ struct ad9854_ser_reg ad9854_ser_reg_tbl[AD9854_REG_SER_SIZE]
 	[AD9854_REG_SER_PHASE_ADJ_1] = {
 		.reg_addr = AD9854_REG_SER_PHASE_ADJ_1,
 		.reg_len = 2,
-		.reg_val[0 ... 5] = 0x00,
+		.reg_val = 0x00,
 	},
 
 	[AD9854_REG_SER_PHASE_ADJ_2] = {
 		.reg_addr = AD9854_REG_SER_PHASE_ADJ_2,
 		.reg_len = 2,
-		.reg_val[0 ... 5] = 0x00,
+		.reg_val = 0x00,
 	},
 
 	[AD9854_REG_SER_FREQ_TUNING_WORD_1] = {
 		.reg_addr = AD9854_REG_SER_FREQ_TUNING_WORD_1,
 		.reg_len = 6,
-		.reg_val[0 ... 5] = 0x00,
+		.reg_val = 0x00,
 	},
 
 	[AD9854_REG_SER_FREQ_TUNING_WORD_2] = {
 		.reg_addr = AD9854_REG_SER_FREQ_TUNING_WORD_2,
 		.reg_len = 6,
-		.reg_val[0 ... 5] = 0x00,
+		.reg_val = 0x00,
 	},
 
 	[AD9854_REG_SER_DELTA_FREQ_WORD] = {
 		.reg_addr = AD9854_REG_SER_DELTA_FREQ_WORD,
 		.reg_len = 6,
-		.reg_val[0 ... 5] = 0x00,
+		.reg_val = 0x00,
 	},
 
 	[AD9854_REG_SER_UPDATE_CLOCK] = {
 		.reg_addr = AD9854_REG_SER_UPDATE_CLOCK,
 		.reg_len = 4,
-		.reg_val = { [0] = 0x40},
+		.reg_val = 0x40,
 	},
 
 	[AD9854_REG_SER_RAMP_RATE_CLOCK] = {
 		.reg_addr = AD9854_REG_SER_RAMP_RATE_CLOCK,
 		.reg_len = 3,
-		.reg_val[0 ... 5] = 0x00,
+		.reg_val = 0x00,
 	},
 
 	[AD9854_REG_SER_CTRL] = {
 		.reg_addr = AD9854_REG_SER_CTRL,
 		.reg_len = 4,
-		.reg_val = {
-			[0] = 0x20,
-			[1] = 0x01,
-			[2] = 0x64,
-			[3] = 0x10,
-		},
+		.reg_val = 0x10640120,
 	},
 
 	[AD9854_REG_SER_OUTPUT_I_MULTIPLIER] = {
 		.reg_addr = AD9854_REG_SER_OUTPUT_I_MULTIPLIER,
 		.reg_len = 2,
-		.reg_val[0 ... 5] = 0x00,
+		.reg_val = 0x00,
 	},
 
 	[AD9854_REG_SER_OUTPUT_Q_MULTIPLIER] = {
 		.reg_addr = AD9854_REG_SER_OUTPUT_Q_MULTIPLIER,
 		.reg_len = 2,
-		.reg_val[0 ... 5] = 0x00,
+		.reg_val = 0x00,
 	},
 
 	[AD9854_REG_SER_OUTPUT_RAMP_RATE] = {
 		.reg_addr = AD9854_REG_SER_OUTPUT_RAMP_RATE,
 		.reg_len = 1,
-		.reg_val = { [0] = 0x80 },
+		.reg_val = 0x80,
 	},
 
 	[AD9854_REG_SER_QDAC] = {
 		.reg_addr = AD9854_REG_SER_QDAC,
 		.reg_len = 2,
-		.reg_val[0 ... 5] = 0x00,
+		.reg_val = 0x00,
 	},
 
 };
@@ -220,13 +220,7 @@ struct ad9854_ser_reg ad9854_ser_reg_tbl[AD9854_REG_SER_SIZE]
 struct ad9834_state {
 	struct spi_device		*spi;
 	struct regulator		*reg;
-	unsigned int			mclk;
-	unsigned short			control;
-	unsigned short			devid;
-	struct spi_transfer		xfer;
-	struct spi_message		msg;
-	struct spi_transfer		freq_xfer[2];
-	struct spi_message		freq_msg;
+	struct ad9854_platform_data	*pdata;
 
 	/*
 	 * DMA (thus cache coherency maintenance) requires the
@@ -236,6 +230,59 @@ struct ad9834_state {
 	__be16				freq_data[2];
 };
 
+//struct ad9854_reg {
+//	char phase_adjust_reg_1_hl;		/* ad9854 Phase Adjust Register 1 <13:8> */
+//	char phase_adjust_reg_1_ll;		/* ad9854 Phase Adjust Register 1 <7:0> */
+//
+//	char phase_adjust_reg_2_hl;		/* ad9854 Phase Adjust Register 2 <13:8> */
+//	char phase_adjust_reg_2_ll;		/* ad9854 Phase Adjust Register 2 <7:0> */
+//
+//	char freq_tuning_word_1_hh;		/* ad9854 Frequency Tuning Word 1 <47:40> */
+//	char freq_tuning_word_1_lh;		/* ad9854 Frequency Tuning Word 1 <39:32> */
+//	char freq_tuning_word_1_hm;		/* ad9854 Frequency Tuning Word 1 <31:24> */
+//	char freq_tuning_word_1_lm;		/* ad9854 Frequency Tuning Word 1 <23:16> */
+//	char freq_tuning_word_1_hl;		/* ad9854 Frequency Tuning Word 1 <15:8> */
+//	char freq_tuning_word_1_ll;		/* ad9854 Frequency Tuning Word 1 <7:0> */
+//
+//	char freq_tuning_word_2_hh;		/* ad9854 Frequency Tuning Word 2 <47:40> */
+//	char freq_tuning_word_2_lh;		/* ad9854 Frequency Tuning Word 2 <39:32> */
+//	char freq_tuning_word_2_hm;		/* ad9854 Frequency Tuning Word 2 <31:24> */
+//	char freq_tuning_word_2_lm;		/* ad9854 Frequency Tuning Word 2 <23:16> */
+//	char freq_tuning_word_2_hl;		/* ad9854 Frequency Tuning Word 2 <15:8> */
+//	char freq_tuning_word_2_ll;		/* ad9854 Frequency Tuning Word 2 <7:0> */
+//
+//	char delta_freq_word_hh;		/* ad9854 Delta requency word <47:40> */
+//	char delta_freq_word_lh;		/* ad9854 Delta requency word <39:32> */
+//	char delta_freq_word_hm;		/* ad9854 Delta requency word <31:24> */
+//	char delta_freq_word_lm;		/* ad9854 Delta requency word <23:16> */
+//	char delta_freq_word_hl;		/* ad9854 Delta requency word <15:8> */
+//	char delta_freq_word_ll;		/* ad9854 Delta requency word <7:0> */
+//
+//	char update_clock_hm;		/* ad9854 Update clock <31:24> */
+//	char update_clock_lm;		/* ad9854 Update clock <23:16> */
+//	char update_clock_hl;		/* ad9854 Update clock <15:8> */
+//	char update_clock_ll;		/* ad9854 Update clock <7:0> */
+//
+//	char ramp_rate_clock_lm;		/* ad9854 Ramp rate clock <19:16> */
+//	char ramp_rate_clock_hl;		/* ad9854 Ramp rate clock <15:8> */
+//	char ramp_rate_clock_ll;		/* ad9854 Ramp rate clock <7:0> */
+//
+//	char control_reg_hm;		/* ad9854 Control register <31:24> */
+//	char control_reg_lm;		/* ad9854 Control register <23:16> */
+//	char control_reg_hl;		/* ad9854 Control register <15:8> */
+//	char control_reg_ll;		/* ad9854 Control register <7:0> */
+//
+//	char osk_i_multiplier_hl;		/* ad9854 Output shaped keying I multiplier <11:8> */
+//	char osk_i_multiplier_ll;		/* ad9854 Output shaped keying I multiplier <7:0> */
+//
+//	char osk_q_multiplier_hl;		/* ad9854 Output shaped keying Q multiplier <11:8> */
+//	char osk_q_multiplier_ll;		/* ad9854 Output shaped keying Q multiplier <7:0> */
+//
+//	char osk_ramp_rate;		/* ad9854 Output shaped keying ramp rate <7:0> */
+//
+//	char qdac_hl;		/* ad9854 QDAC <11:8> */
+//	char qdac_ll;		/* ad9854 QDAC <7:0> */
+//};
 
 /**
  * struct ad9854_platform_data - platform specific information
@@ -259,6 +306,8 @@ struct ad9854_platform_data {
 	unsigned short		phase1;
 	bool			en_div2;
 	bool			en_signbit_msb_out;
+	unsigned		gpio_osk;
+	unsigned		gpio_fsk_bpsk_hold;
 	unsigned		gpio_io_ud_clk;
 	unsigned		gpio_m_reset;
 	unsigned		gpio_io_reset;
