@@ -1,7 +1,7 @@
 /*
- * AD7606 SPI ADC driver
+ * AD9854 SPI DDS driver
  *
- * Copyright 2011 Analog Devices Inc.
+ * Copyright 2015 SYSU SIST JinWei Hwang.
  *
  * Licensed under the GPL-2.
  */
@@ -51,11 +51,6 @@ static int ad9854_master_reset(struct ad9854_state *st)
 	}
 
 	return -ENODEV;
-}
-
-static void ad9854_init(struct ad9854_state *st)
-{
-
 }
 
 static int ad9854_request_gpios(struct ad9854_state *st)
@@ -161,7 +156,7 @@ error_ret:
 	return ret;
 }
 
-static void ad7606_free_gpios(struct ad9854_state *st)
+static void ad9854_free_gpios(struct ad9854_state *st)
 {
 	if (gpio_is_valid(st->pdata->gpio_sp_select))
 		gpio_free(st->pdata->gpio_sp_select);
@@ -248,7 +243,7 @@ static int ad9854_spi_write_reg(struct device *dev,
 }
 
 static const struct ad9854_bus_ops ad9854_spi_bops = {
-	.read_block	= ad9854_spi_read_block,
+	NULL,
 };
 
 static ssize_t ad9854_read(struct device *dev,
@@ -286,7 +281,7 @@ static ssize_t ad9854_read(struct device *dev,
 	}
 	mutex_unlock(&indio_dev->mlock);
 
-	return sprintf(buf, "%u\n", st->oversampling);
+	return sprintf(buf, "%lld\n", reg->reg_val);
 }
 
 static ssize_t ad9854_write(struct device *dev, struct device_attribute *attr,
@@ -309,6 +304,7 @@ static ssize_t ad9854_write(struct device *dev, struct device_attribute *attr,
 	case AD9854_REG_SER_PHASE_ADJ_2:
 	case AD9854_REG_SER_FREQ_TUNING_WORD_1:
 	case AD9854_REG_SER_FREQ_TUNING_WORD_2:
+	// TODO : calc freq word
 	case AD9854_REG_SER_DELTA_FREQ_WORD:
 	case AD9854_REG_SER_UPDATE_CLOCK:
 	case AD9854_REG_SER_RAMP_RATE_CLOCK:
@@ -374,6 +370,14 @@ static struct attribute *ad9854_attributes[] = {
 	&iio_dev_attr_out_altvoltage0_frequencysymbol.dev_attr.attr,
 	&iio_dev_attr_out_altvoltage0_phasesymbol.dev_attr.attr,
 	&iio_dev_attr_out_altvoltage0_out_enable.dev_attr.attr,
+
+	&iio_dev_attr_out_altvoltage0_deltafrequency.dev_attr.attr,
+	&iio_dev_attr_out_altvoltage0_updateclk.dev_attr.attr,
+	&iio_dev_attr_out_altvoltage0_ramprateclk.dev_attr.attr,
+	&iio_dev_attr_out_altvoltage0_osk_imulti.dev_attr.attr,
+	&iio_dev_attr_out_altvoltage0_osk_qmulti.dev_attr.attr,
+	&iio_dev_attr_out_altvoltage0_osk_ramprate.dev_attr.attr,
+	&iio_dev_attr_out_altvoltage0_qdac.dev_attr.attr,
 	NULL,
 };
 
@@ -402,11 +406,11 @@ ad9854_parse_dt(struct spi_device *spi)
 		return NULL; /* out of memory */
 
 	/* no such property */
-	if (of_property_read_u32(node, "ad9854,default_os", &pdata->default_os) != 0)
-	{
-		dev_err(&spi->dev, "default_os property is not defined.\n");
-		return NULL;
-	}
+	// if (of_property_read_u32(node, "ad9854,default_os", &pdata->default_os) != 0)
+	// {
+	// 	dev_err(&spi->dev, "default_os property is not defined.\n");
+	// 	return NULL;
+	// }
 
 	/* now get the gpio number*/
 	gpio_osk = of_get_named_gpio(node, "ad9854,gpio_osk", 0);
@@ -479,7 +483,74 @@ ad9854_parse_dt(struct spi_device *spi)
 	/* pdata is filled */
 	return pdata;
 }
-//=============================================================
+
+struct iio_dev *ad9854_probe(struct device *dev
+                             unsigned id,
+                             const struct ad9854_bus_ops *bops)
+{
+	struct ad9854_platform_data *pdata = dev->platform_data;
+	struct ad9854_state *st;
+	int ret;
+	struct iio_dev *indio_dev;
+
+	indio_dev = devm_iio_device_alloc(dev, sizeof(*st));
+	if (!indio_dev)
+		return ERR_PTR(-ENOMEM);
+
+	st = iio_priv(indio_dev);
+
+	st->dev = dev;
+	st->bops = bops;
+
+	st->reg = devm_regulator_get(dev, "vcc");
+	if (!IS_ERR(st->reg)) {
+		ret = regulator_enable(st->reg);
+		if (ret)
+			return ERR_PTR(ret);
+	}
+
+	st->pdata = pdata;
+
+	indio_dev->dev.parent = dev;
+	indio_dev->modes = INDIO_DIRECT_MODE;
+
+	ret = ad9854_request_gpios(st);
+	if (ret)
+		goto error_disable_reg;
+
+	ret = ad9854_master_reset(st);
+	if (ret)
+		dev_warn(st->dev, "Failed to RESET: no MASTER RESET GPIO specified\n");
+
+	ret = iio_device_register(indio_dev);
+	if (ret)
+		goto error_unregister_ring;
+
+	return indio_dev;
+
+error_free_gpios:
+	ad9854_free_gpios(st);
+
+error_disable_reg:
+	if (!IS_ERR(st->reg))
+		regulator_disable(st->reg);
+	return ERR_PTR(ret);
+}
+
+
+int ad9854_remove(struct iio_dev *indio_dev)
+{
+	struct ad9854_state *st = iio_priv(indio_dev);
+
+	iio_device_unregister(indio_dev);
+
+	if (!IS_ERR(st->reg))
+		regulator_disable(st->reg);
+
+	ad9854_free_gpios(st);
+
+	return 0;
+}
 
 static int ad9854_spi_probe(struct spi_device *spi)
 {
@@ -491,9 +562,13 @@ static int ad9854_spi_probe(struct spi_device *spi)
 		pdata = ad9854_parse_dt(spi);
 		if (pdata != NULL)
 			spi->dev.platform_data = pdata;
+		else {
+			dev_dbg(&spi->dev, "no platform data?\n");
+			return -ENODEV;
+		}
 	}
 
-	indio_dev = ad9854_probe(&spi->dev, spi->irq, NULL,
+	indio_dev = ad9854_probe(&spi->dev,
 	                         spi_get_device_id(spi)->driver_data,
 	                         &ad9854_spi_bops);
 
@@ -509,25 +584,19 @@ static int ad9854_spi_remove(struct spi_device *spi)
 {
 	struct iio_dev *indio_dev = dev_get_drvdata(&spi->dev);
 
-	return ad9854_remove(indio_dev, spi->irq);
+	return ad9854_remove(indio_dev);
 }
 
 #ifdef CONFIG_PM
 static int ad9854_spi_suspend(struct device *dev)
 {
-	struct iio_dev *indio_dev = dev_get_drvdata(dev);
-
-	ad9854_suspend(indio_dev);
-
+	// TODO : power manager
 	return 0;
 }
 
 static int ad9854_spi_resume(struct device *dev)
 {
-	struct iio_dev *indio_dev = dev_get_drvdata(dev);
-
-	ad9854_resume(indio_dev);
-
+	// TODO : power manager
 	return 0;
 }
 
@@ -535,10 +604,10 @@ static const struct dev_pm_ops ad9854_pm_ops = {
 	.suspend = ad9854_spi_suspend,
 	.resume  = ad9854_spi_resume,
 };
-#define AD7606_SPI_PM_OPS (&ad9854_pm_ops)
+#define AD9854_SPI_PM_OPS (&ad9854_pm_ops)
 
 #else
-#define AD7606_SPI_PM_OPS NULL
+#define AD9854_SPI_PM_OPS NULL
 #endif
 
 static const struct spi_device_id ad9854_id[] = {
@@ -559,7 +628,7 @@ static struct spi_driver ad9854_driver = {
 	.driver = {
 		.name = "ad9854",
 		.owner = THIS_MODULE,
-		.pm    = AD7606_SPI_PM_OPS,
+		.pm    = AD9854_SPI_PM_OPS,
 #ifdef CONFIG_OF
 		.of_match_table = of_match_ptr(ad9854_dt_ids),
 #endif

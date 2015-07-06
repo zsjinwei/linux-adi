@@ -1,4 +1,3 @@
-
 /*
  * AD9854 SPI DDS driver
  *
@@ -6,6 +5,7 @@
  *
  * Licensed under the GPL-2.
  */
+
 #ifndef IIO_DDS_AD9854_H_
 #define IIO_DDS_AD9854_H_
 
@@ -70,7 +70,7 @@
  */
 
 #define IIO_DEV_ATTR_DELTAFREQ(_channel, _mode, _show, _store, _addr)	\
-	IIO_DEVICE_ATTR(out_altvoltage##_channel##_frequencysymbol,	\
+	IIO_DEVICE_ATTR(out_altvoltage##_channel##_deltafrequency,	\
 			_mode, _show, _store, _addr)
 
 /**
@@ -203,6 +203,12 @@ struct ad9854_ser_reg ad9854_ser_reg_tbl[AD9854_REG_SER_SIZE]
 	},
 
 };
+
+struct ad9854_bus_ops {
+	/* more methods added in future? */
+	NULL,
+};
+
 /**
  * struct ad9854_state - driver instance specific data
  * @spi:		spi_device
@@ -221,7 +227,7 @@ struct ad9834_state {
 	struct spi_device		*spi;
 	struct regulator		*reg;
 	struct ad9854_platform_data	*pdata;
-
+	const struct ad9854_bus_ops	*bops;
 	/*
 	 * DMA (thus cache coherency maintenance) requires the
 	 * transfer buffers to live in their own cache lines.
