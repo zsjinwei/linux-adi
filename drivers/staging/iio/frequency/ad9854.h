@@ -128,113 +128,12 @@ struct ad9854_ser_reg
 	unsigned long long reg_val;
 };
 
-struct ad9854_ser_reg ad9854_ser_reg_tbl[AD9854_REG_SER_SIZE]
-{
-	[AD9854_REG_SER_PHASE_ADJ_1] = {
-		.reg_addr = AD9854_REG_SER_PHASE_ADJ_1,
-		.reg_len = 2,
-		.reg_val = 0x00,
-	},
-
-	[AD9854_REG_SER_PHASE_ADJ_2] = {
-		.reg_addr = AD9854_REG_SER_PHASE_ADJ_2,
-		.reg_len = 2,
-		.reg_val = 0x00,
-	},
-
-	[AD9854_REG_SER_FREQ_TUNING_WORD_1] = {
-		.reg_addr = AD9854_REG_SER_FREQ_TUNING_WORD_1,
-		.reg_len = 6,
-		.reg_val = 0x00,
-	},
-
-	[AD9854_REG_SER_FREQ_TUNING_WORD_2] = {
-		.reg_addr = AD9854_REG_SER_FREQ_TUNING_WORD_2,
-		.reg_len = 6,
-		.reg_val = 0x00,
-	},
-
-	[AD9854_REG_SER_DELTA_FREQ_WORD] = {
-		.reg_addr = AD9854_REG_SER_DELTA_FREQ_WORD,
-		.reg_len = 6,
-		.reg_val = 0x00,
-	},
-
-	[AD9854_REG_SER_UPDATE_CLOCK] = {
-		.reg_addr = AD9854_REG_SER_UPDATE_CLOCK,
-		.reg_len = 4,
-		.reg_val = 0x40,
-	},
-
-	[AD9854_REG_SER_RAMP_RATE_CLOCK] = {
-		.reg_addr = AD9854_REG_SER_RAMP_RATE_CLOCK,
-		.reg_len = 3,
-		.reg_val = 0x00,
-	},
-
-	[AD9854_REG_SER_CTRL] = {
-		.reg_addr = AD9854_REG_SER_CTRL,
-		.reg_len = 4,
-		.reg_val = 0x10640120,
-	},
-
-	[AD9854_REG_SER_OUTPUT_I_MULTIPLIER] = {
-		.reg_addr = AD9854_REG_SER_OUTPUT_I_MULTIPLIER,
-		.reg_len = 2,
-		.reg_val = 0x00,
-	},
-
-	[AD9854_REG_SER_OUTPUT_Q_MULTIPLIER] = {
-		.reg_addr = AD9854_REG_SER_OUTPUT_Q_MULTIPLIER,
-		.reg_len = 2,
-		.reg_val = 0x00,
-	},
-
-	[AD9854_REG_SER_OUTPUT_RAMP_RATE] = {
-		.reg_addr = AD9854_REG_SER_OUTPUT_RAMP_RATE,
-		.reg_len = 1,
-		.reg_val = 0x80,
-	},
-
-	[AD9854_REG_SER_QDAC] = {
-		.reg_addr = AD9854_REG_SER_QDAC,
-		.reg_len = 2,
-		.reg_val = 0x00,
-	},
-
-};
-
 struct ad9854_bus_ops {
 	/* more methods added in future? */
-	NULL,
+	int (*read_reg)(struct device *dev, struct ad9854_ser_reg *reg);
+	int (*write_reg)(struct device *dev, struct ad9854_ser_reg *reg);
 };
 
-/**
- * struct ad9854_state - driver instance specific data
- * @spi:		spi_device
- * @reg:		supply regulator
- * @mclk:		external master clock
- * @control:		cached control word
- * @xfer:		default spi transfer
- * @msg:		default spi message
- * @freq_xfer:		tuning word spi transfer
- * @freq_msg:		tuning word spi message
- * @data:		spi transmit buffer
- * @freq_data:		tuning word spi transmit buffer
- */
-
-struct ad9834_state {
-	struct spi_device		*spi;
-	struct regulator		*reg;
-	struct ad9854_platform_data	*pdata;
-	const struct ad9854_bus_ops	*bops;
-	/*
-	 * DMA (thus cache coherency maintenance) requires the
-	 * transfer buffers to live in their own cache lines.
-	 */
-	__be16				data ____cacheline_aligned;
-	__be16				freq_data[2];
-};
 
 //struct ad9854_reg {
 //	char phase_adjust_reg_1_hl;		/* ad9854 Phase Adjust Register 1 <13:8> */
@@ -318,6 +217,33 @@ struct ad9854_platform_data {
 	unsigned		gpio_m_reset;
 	unsigned		gpio_io_reset;
 	unsigned		gpio_sp_select;
+};
+
+/**
+ * struct ad9854_state - driver instance specific data
+ * @spi:		spi_device
+ * @reg:		supply regulator
+ * @mclk:		external master clock
+ * @control:		cached control word
+ * @xfer:		default spi transfer
+ * @msg:		default spi message
+ * @freq_xfer:		tuning word spi transfer
+ * @freq_msg:		tuning word spi message
+ * @data:		spi transmit buffer
+ * @freq_data:		tuning word spi transmit buffer
+ */
+
+struct ad9854_state {
+	struct spi_device		*spi;
+	struct regulator		*reg;
+	struct ad9854_platform_data	*pdata;
+	const struct ad9854_bus_ops	*bops;
+	struct ad9854_ser_reg *ser_regs;
+	/*
+	 * DMA (thus cache coherency maintenance) requires the
+	 * transfer buffers to live in their own cache lines.
+	 */
+	__be16				data ____cacheline_aligned;
 };
 
 /**

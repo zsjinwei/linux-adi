@@ -147,7 +147,7 @@
 };
 
 &i2c0 {
-	status = "okay";
+	status = "disabled";
 };
 
 &i2c1 {
@@ -394,6 +394,27 @@
 			rockchip,pins = <RK_GPIO1 2 RK_FUNC_GPIO &pcfg_pull_none>;  
 		};*/
 	};
+
+	ad9854 {
+		gpio_osk: gpio-osk {
+			rockchip,pins = <RK_GPIO1 24 RK_FUNC_GPIO &pcfg_pull_none>; 
+		};
+		gpio_fsk_bpsk_hold: gpio-fsk-bpsk-hold {
+			rockchip,pins = <RK_GPIO1 25 RK_FUNC_GPIO &pcfg_pull_none>; 
+		};
+		gpio_io_ud_clk: gpio-io-ud-clk {
+			rockchip,pins = <RK_GPIO1 12 RK_FUNC_GPIO &pcfg_pull_none>; 
+		};
+		gpio_m_reset: gpio-m-reset {
+			rockchip,pins = <RK_GPIO1 10 RK_FUNC_GPIO &pcfg_pull_none>; 
+		};
+		gpio_io_reset: gpio-io-reset {
+			rockchip,pins = <RK_GPIO1 11 RK_FUNC_GPIO &pcfg_pull_none>; 
+		};
+		gpio_sp_select: gpio-sp-select {
+			rockchip,pins = <RK_GPIO1 13 RK_FUNC_GPIO &pcfg_pull_none>; 
+		};
+	};
 };
 
 &saradc {
@@ -428,6 +449,21 @@
 
 &spi1 {
 	status = "okay";
+	dds@0{
+		compatible = "adi,ad9854";
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+		spi-cpha;
+		spi-cpol;
+		ad9854,gpio_osk = <&gpio1 24 GPIO_ACTIVE_LOW>;
+		ad9854,gpio_fsk_bpsk_hold = <&gpio1 25 GPIO_ACTIVE_LOW>;
+		ad9854,gpio_io_ud_clk = <&gpio1 12 GPIO_ACTIVE_LOW>;
+		ad9854,gpio_m_reset = <&gpio1 10 GPIO_ACTIVE_LOW>;
+		ad9854,gpio_io_reset = <&gpio1 11 GPIO_ACTIVE_LOW>;
+		ad9854,gpio_sp_select = <&gpio1 13 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&gpio_osk &gpio_fsk_bpsk_hold &gpio_io_ud_clk &gpio_m_reset &gpio_io_reset &gpio_sp_select>;
+	};
 };
 
 &uart0 {

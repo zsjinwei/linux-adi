@@ -8,16 +8,103 @@
 
 #include <linux/module.h>
 #include <linux/spi/spi.h>
+#include <linux/regulator/consumer.h>
 #include <linux/types.h>
 #include <linux/err.h>
+#include <linux/delay.h>
+#include <linux/iio/iio.h>
+#include <linux/gpio.h>
+#include <linux/delay.h>
+#include <linux/sched.h>
 
 #include <linux/iio/iio.h>
+#include <linux/iio/sysfs.h>
+#include "dds.h"
 #include "ad9854.h"
 
 #include <linux/pinctrl/consumer.h>
 #include <linux/of_gpio.h>
 
 #define MAX_SPI_FREQ_HZ		10000000
+
+#ifndef AD9854_REG_SER_SIZE
+#define AD9854_REG_SER_SIZE		12
+#endif
+
+struct ad9854_ser_reg ad9854_ser_reg_tbl[AD9854_REG_SER_SIZE] = {
+	[AD9854_REG_SER_PHASE_ADJ_1] = {
+		.reg_addr = AD9854_REG_SER_PHASE_ADJ_1,
+		.reg_len = 2,
+		.reg_val = 0x00,
+	},
+
+	[AD9854_REG_SER_PHASE_ADJ_2] = {
+		.reg_addr = AD9854_REG_SER_PHASE_ADJ_2,
+		.reg_len = 2,
+		.reg_val = 0x00,
+	},
+
+	[AD9854_REG_SER_FREQ_TUNING_WORD_1] = {
+		.reg_addr = AD9854_REG_SER_FREQ_TUNING_WORD_1,
+		.reg_len = 6,
+		.reg_val = 0x00,
+	},
+
+	[AD9854_REG_SER_FREQ_TUNING_WORD_2] = {
+		.reg_addr = AD9854_REG_SER_FREQ_TUNING_WORD_2,
+		.reg_len = 6,
+		.reg_val = 0x00,
+	},
+
+	[AD9854_REG_SER_DELTA_FREQ_WORD] = {
+		.reg_addr = AD9854_REG_SER_DELTA_FREQ_WORD,
+		.reg_len = 6,
+		.reg_val = 0x00,
+	},
+
+	[AD9854_REG_SER_UPDATE_CLOCK] = {
+		.reg_addr = AD9854_REG_SER_UPDATE_CLOCK,
+		.reg_len = 4,
+		.reg_val = 0x40,
+	},
+
+	[AD9854_REG_SER_RAMP_RATE_CLOCK] = {
+		.reg_addr = AD9854_REG_SER_RAMP_RATE_CLOCK,
+		.reg_len = 3,
+		.reg_val = 0x00,
+	},
+
+	[AD9854_REG_SER_CTRL] = {
+		.reg_addr = AD9854_REG_SER_CTRL,
+		.reg_len = 4,
+		.reg_val = 0x10640120,
+	},
+
+	[AD9854_REG_SER_OUTPUT_I_MULTIPLIER] = {
+		.reg_addr = AD9854_REG_SER_OUTPUT_I_MULTIPLIER,
+		.reg_len = 2,
+		.reg_val = 0x00,
+	},
+
+	[AD9854_REG_SER_OUTPUT_Q_MULTIPLIER] = {
+		.reg_addr = AD9854_REG_SER_OUTPUT_Q_MULTIPLIER,
+		.reg_len = 2,
+		.reg_val = 0x00,
+	},
+
+	[AD9854_REG_SER_OUTPUT_RAMP_RATE] = {
+		.reg_addr = AD9854_REG_SER_OUTPUT_RAMP_RATE,
+		.reg_len = 1,
+		.reg_val = 0x80,
+	},
+
+	[AD9854_REG_SER_QDAC] = {
+		.reg_addr = AD9854_REG_SER_QDAC,
+		.reg_len = 2,
+		.reg_val = 0x00,
+	},
+
+};
 
 // struct ad9854_reg ad9854_reg
 // {
@@ -62,7 +149,7 @@ static int ad9854_request_gpios(struct ad9854_state *st)
 		                       GPIOF_OUT_INIT_LOW,
 		                       "AD9854_OSK");
 		if (ret) {
-			dev_err(st->dev, "failed to request GPIO OSK\n");
+			dev_err(&st->spi->dev, "failed to request GPIO OSK\n");
 			goto error_ret;
 		}
 	} else {
@@ -75,7 +162,7 @@ static int ad9854_request_gpios(struct ad9854_state *st)
 		                       GPIOF_OUT_INIT_LOW,
 		                       "AD9854_FSK_BPSK_HOLD");
 		if (ret) {
-			dev_err(st->dev, "failed to request GPIO FSK/BPSK/HOLD\n");
+			dev_err(&st->spi->dev, "failed to request GPIO FSK/BPSK/HOLD\n");
 			goto error_free_osk;
 		}
 	} else {
@@ -88,7 +175,7 @@ static int ad9854_request_gpios(struct ad9854_state *st)
 		                       GPIOF_OUT_INIT_LOW,
 		                       "AD9854_IO_UD_CLK");
 		if (ret) {
-			dev_err(st->dev, "failed to request GPIO I/O UD CLK\n");
+			dev_err(&st->spi->dev, "failed to request GPIO I/O UD CLK\n");
 			goto error_free_fskbpskhold;
 		}
 	} else {
@@ -101,7 +188,7 @@ static int ad9854_request_gpios(struct ad9854_state *st)
 		                       GPIOF_OUT_INIT_LOW,
 		                       "AD9854_MASTER_RESET");
 		if (ret) {
-			dev_err(st->dev, "failed to request GPIO MASTER RESET\n");
+			dev_err(&st->spi->dev, "failed to request GPIO MASTER RESET\n");
 			goto error_free_ioudclk;
 		}
 	} else {
@@ -114,7 +201,7 @@ static int ad9854_request_gpios(struct ad9854_state *st)
 		                       GPIOF_OUT_INIT_LOW,
 		                       "AD9854_IO_RESET");
 		if (ret) {
-			dev_err(st->dev, "failed to request GPIO IO RESET\n");
+			dev_err(&st->spi->dev, "failed to request GPIO IO RESET\n");
 			goto error_free_mreset;
 		}
 	} else {
@@ -127,7 +214,7 @@ static int ad9854_request_gpios(struct ad9854_state *st)
 		                       GPIOF_OUT_INIT_LOW,
 		                       "AD9854_SP_SELECT");
 		if (ret) {
-			dev_err(st->dev, "failed to request GPIO S/P SELECT\n");
+			dev_err(&st->spi->dev, "failed to request GPIO S/P SELECT\n");
 			goto error_free_ioreset;
 		}
 	} else {
@@ -185,7 +272,7 @@ static int ad9854_spi_read_reg(struct device *dev,
 	struct iio_dev *indio_dev = dev_to_iio_dev(dev);
 	struct ad9854_state *st = iio_priv(indio_dev);
 	struct spi_device *spi = to_spi_device(dev);
-	int i, ret;
+	int ret;
 	unsigned long long reg_val = 0;
 	char *data = (char *) &reg_val;
 	char *data_tmp = data + (6 - reg->reg_len);
@@ -218,11 +305,11 @@ static int ad9854_spi_write_reg(struct device *dev,
 	struct iio_dev *indio_dev = dev_to_iio_dev(dev);
 	struct ad9854_state *st = iio_priv(indio_dev);
 	struct spi_device *spi = to_spi_device(dev);
-	int i, ret;
+	int ret;
 	unsigned long long reg_val = cpu_to_be64(reg->reg_val);  // use MSB as default
 	char *data = (char *) &reg_val;
-	data += (6 - reg->reg_len);
 	char tx_inst = AD9854_INST_ADDR_W(reg->reg_addr);
+	data += (6 - reg->reg_len);
 
 	// I/O reset before operation in order to synchronization with the AD9854
 	ad9854_io_reset(st);
@@ -243,13 +330,15 @@ static int ad9854_spi_write_reg(struct device *dev,
 }
 
 static const struct ad9854_bus_ops ad9854_spi_bops = {
-	NULL,
+	.read_reg = &ad9854_spi_read_reg,
+	.write_reg = &ad9854_spi_write_reg,
 };
 
 static ssize_t ad9854_read(struct device *dev,
                            struct device_attribute *attr, char *buf)
 {
 	struct iio_dev *indio_dev = dev_to_iio_dev(dev);
+	struct ad9854_state *st = iio_priv(indio_dev);
 	struct iio_dev_attr *this_attr = to_iio_dev_attr(attr);
 	struct ad9854_ser_reg *reg;
 	int ret;
@@ -268,7 +357,7 @@ static ssize_t ad9854_read(struct device *dev,
 	case AD9854_REG_SER_OUTPUT_Q_MULTIPLIER:
 	case AD9854_REG_SER_OUTPUT_RAMP_RATE:
 	case AD9854_REG_SER_QDAC:
-		reg = &ad9854_ser_reg_tbl[this_attr->address];
+		reg = &st->ser_regs[this_attr->address];
 		ret = ad9854_spi_read_reg(dev, reg);
 		break;
 	case AD9854_REG_SER_CTRL:
@@ -313,7 +402,7 @@ static ssize_t ad9854_write(struct device *dev, struct device_attribute *attr,
 	case AD9854_REG_SER_OUTPUT_Q_MULTIPLIER:
 	case AD9854_REG_SER_OUTPUT_RAMP_RATE:
 	case AD9854_REG_SER_QDAC:
-		reg = &ad9854_ser_reg_tbl[this_attr->address];
+		reg = &st->ser_regs[this_attr->address];
 		old_val = reg->reg_val;
 		reg->reg_val = val;
 		ret = ad9854_spi_write_reg(dev, reg);
@@ -345,11 +434,11 @@ static IIO_CONST_ATTR_FREQ_SCALE(0, "1"); /* 1Hz */
 
 static IIO_DEV_ATTR_PHASE(0, 0, S_IWUSR, ad9854_read, ad9854_write, AD9854_REG_SER_PHASE_ADJ_1);
 static IIO_DEV_ATTR_PHASE(0, 1, S_IWUSR, ad9854_read, ad9854_write, AD9854_REG_SER_PHASE_ADJ_2);
-static IIO_DEV_ATTR_PHASESYMBOL(0, S_IWUSR, ad9854_read, ad9854_write, ad9854_PHASE_SYM);
+static IIO_DEV_ATTR_PHASESYMBOL(0, S_IWUSR, ad9854_read, ad9854_write, AD9854_PHASE_SYM);
 static IIO_CONST_ATTR_PHASE_SCALE(0, "0.0015339808"); /* 2PI/2^12 rad*/
 
 static IIO_DEV_ATTR_PINCONTROL_EN(0, S_IWUSR, ad9854_read, ad9854_write, AD9854_PINCTRL_EN);
-static IIO_DEV_ATTR_OUT_ENABLE(0, S_IWUSR, ad9854_read, ad9854_write, ad9854_OUTPUT_EN);
+static IIO_DEV_ATTR_OUT_ENABLE(0, S_IWUSR, ad9854_read, ad9854_write, AD9854_OUTPUT_EN);
 
 static IIO_DEV_ATTR_DELTAFREQ(0, S_IWUSR, ad9854_read, ad9854_write, AD9854_REG_SER_DELTA_FREQ_WORD);
 static IIO_DEV_ATTR_UPDATECLK(0, S_IWUSR, ad9854_read, ad9854_write, AD9854_REG_SER_UPDATE_CLOCK);
@@ -484,12 +573,13 @@ ad9854_parse_dt(struct spi_device *spi)
 	return pdata;
 }
 
-struct iio_dev *ad9854_probe(struct device *dev
+struct iio_dev *ad9854_probe(struct device *dev,
                              unsigned id,
                              const struct ad9854_bus_ops *bops)
 {
 	struct ad9854_platform_data *pdata = dev->platform_data;
 	struct ad9854_state *st;
+	struct spi_device *spi = to_spi_device(dev);
 	int ret;
 	struct iio_dev *indio_dev;
 
@@ -499,9 +589,9 @@ struct iio_dev *ad9854_probe(struct device *dev
 
 	st = iio_priv(indio_dev);
 
-	st->dev = dev;
+	st->spi = spi;
 	st->bops = bops;
-
+	st->ser_regs = ad9854_ser_reg_tbl;
 	st->reg = devm_regulator_get(dev, "vcc");
 	if (!IS_ERR(st->reg)) {
 		ret = regulator_enable(st->reg);
@@ -520,11 +610,11 @@ struct iio_dev *ad9854_probe(struct device *dev
 
 	ret = ad9854_master_reset(st);
 	if (ret)
-		dev_warn(st->dev, "Failed to RESET: no MASTER RESET GPIO specified\n");
+		dev_warn(&st->spi->dev, "Failed to RESET: no MASTER RESET GPIO specified\n");
 
 	ret = iio_device_register(indio_dev);
 	if (ret)
-		goto error_unregister_ring;
+		goto error_free_gpios;
 
 	return indio_dev;
 
