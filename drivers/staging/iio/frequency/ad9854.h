@@ -11,6 +11,7 @@
 
 /* Registers */
 #define AD9854_REG_SER_SIZE		12
+#define AD9854_REG_SER_CTRL_DEFAULT_VAL		0x10640120
 
 #define AD9854_REG_SER_PHASE_ADJ_1		0x00
 #define AD9854_REG_SER_PHASE_ADJ_2		0x01
@@ -37,27 +38,27 @@
 #define AD9854_INST_ADDR_W(addr)		(AD9854_INST_W | (addr & (0x0F)))
 
 /* control reg bits(31:24) */
-#define CTRL_CR_COMP_PU		(1<<4)
-#define CTRL_CR_QDAC_PD		(1<<2)
-#define CTRL_CR_DAC_PD		(1<<1)
-#define CTRL_CR_DIG_PD		(1<<0)
+#define CTRL_CR_COMP_PD		(1<<28)
+#define CTRL_CR_QDAC_PD		(1<<26)
+#define CTRL_CR_DAC_PD		(1<<25)
+#define CTRL_CR_DIG_PD		(1<<24)
 /* control reg bits(24:16) */
-#define CTRL_CR_PLL_RANGE		(1<<6)
-#define CTRL_CR_BYPASS_PLL		(1<<5)
-#define CTRL_CR_REF_MULT_4		(1<<4)
-#define CTRL_CR_REF_MULT_3		(1<<3)
-#define CTRL_CR_REF_MULT_2		(1<<2)
-#define CTRL_CR_REF_MULT_1		(1<<1)
-#define CTRL_CR_REF_MULT_0		(1<<0)
+#define CTRL_CR_PLL_RANGE		(1<<22)
+#define CTRL_CR_BYPASS_PLL		(1<<21)
+#define CTRL_CR_REF_MULT_4		(1<<20)
+#define CTRL_CR_REF_MULT_3		(1<<19)
+#define CTRL_CR_REF_MULT_2		(1<<18)
+#define CTRL_CR_REF_MULT_1		(1<<17)
+#define CTRL_CR_REF_MULT_0		(1<<16)
 /* control reg bits(15:8) */
-#define CTRL_CR_CLR_ACC_1		(1<<7)
-#define CTRL_CR_CLR_ACC_2		(1<<6)
-#define CTRL_CR_TRIANGLE		(1<<5)
-#define CTRL_CR_SRC_QDAC		(1<<4)
-#define CTRL_CR_MODE_2		(1<<3)
-#define CTRL_CR_MODE_1		(1<<2)
-#define CTRL_CR_MODE_0		(1<<1)
-#define CTRL_CR_IN_EXT_UP_CLK		(1<<0)
+#define CTRL_CR_CLR_ACC_1		(1<<15)
+#define CTRL_CR_CLR_ACC_2		(1<<14)
+#define CTRL_CR_TRIANGLE		(1<<13)
+#define CTRL_CR_SRC_QDAC		(1<<12)
+#define CTRL_CR_MODE_2		(1<<11)
+#define CTRL_CR_MODE_1		(1<<10)
+#define CTRL_CR_MODE_0		(1<<9)
+#define CTRL_CR_IN_EXT_UP_CLK		(1<<8)
 /* control reg bits(7:0) */
 #define CTRL_CR_BYPASS_INV_SINC		(1<<6)
 #define CTRL_CR_OSK_EN		(1<<5)
@@ -125,7 +126,7 @@ struct ad9854_ser_reg
 {
 	unsigned int reg_addr;
 	unsigned int reg_len;
-	unsigned long long reg_val;
+	u64 reg_val;
 };
 
 struct ad9854_bus_ops {

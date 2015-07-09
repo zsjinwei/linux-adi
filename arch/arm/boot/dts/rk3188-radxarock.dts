@@ -452,7 +452,7 @@
 	dds@0{
 		compatible = "adi,ad9854";
 		reg = <0>;
-		spi-max-frequency = <10000000>;
+		spi-max-frequency = <1000000>;
 		spi-cpha;
 		spi-cpol;
 		ad9854,gpio_osk = <&gpio1 24 GPIO_ACTIVE_LOW>;
