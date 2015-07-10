@@ -453,8 +453,10 @@
 		compatible = "adi,ad9854";
 		reg = <0>;
 		spi-max-frequency = <1000000>;
-		spi-cpha;
-		spi-cpol;
+		/*spi-cpha;
+		spi-cpol;*/
+		ad9854,ref_clk = <30000000>;
+		ad9854,ref_mult = <7>;
 		ad9854,gpio_osk = <&gpio1 24 GPIO_ACTIVE_LOW>;
 		ad9854,gpio_fsk_bpsk_hold = <&gpio1 25 GPIO_ACTIVE_LOW>;
 		ad9854,gpio_io_ud_clk = <&gpio1 12 GPIO_ACTIVE_LOW>;

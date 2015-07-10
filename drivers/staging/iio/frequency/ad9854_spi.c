@@ -77,7 +77,7 @@ struct ad9854_ser_reg ad9854_ser_reg_tbl[AD9854_REG_SER_SIZE] = {
 	[AD9854_REG_SER_CTRL] = {
 		.reg_addr = AD9854_REG_SER_CTRL,
 		.reg_len = 4,
-		.reg_val = 0x10640120,
+		.reg_val = AD9854_REG_SER_CTRL_DEFAULT_VAL,
 	},
 
 	[AD9854_REG_SER_OUTPUT_I_MULTIPLIER] = {
@@ -279,13 +279,11 @@ static void ad9854_free_gpios(struct ad9854_state *st)
  * @param  register which read from
  * @return     0 - no error
  */
-static int ad9854_spi_read_reg(struct device *dev,
-                               struct ad9854_ser_reg *reg)
+static int ad9854_spi_read_reg(struct ad9854_state *st, unsigned int reg_addr)
 {
-	struct iio_dev *indio_dev = dev_to_iio_dev(dev);
-	struct ad9854_state *st = iio_priv(indio_dev);
-	struct spi_device *spi = st->spi;
 	int ret;
+	struct spi_device *spi = st->spi;
+	struct ad9854_ser_reg *reg = &st->ser_regs[reg_addr];
 	u64 reg_val = 0;
 	char *data = (char *) &reg_val;
 	char tx_inst = AD9854_INST_ADDR_R(reg->reg_addr);
@@ -304,7 +302,7 @@ static int ad9854_spi_read_reg(struct device *dev,
 
 	reg->reg_val = be64_to_cpu(reg_val);
 	dev_err(&st->spi->dev, "after read reg->reg_val: 0x%4X \n", reg->reg_val);
-	ad9854_io_update(st);
+
 	return 0;
 }
 
@@ -315,36 +313,37 @@ static int ad9854_spi_read_reg(struct device *dev,
  * @param  reg register which write to
  * @return     0 - no error
  */
-static int ad9854_spi_write_reg(struct device *dev,
-                                struct ad9854_ser_reg *reg)
+static int ad9854_spi_write_reg(struct ad9854_state *st, unsigned int reg_addr)
 {
-	struct iio_dev *indio_dev = dev_to_iio_dev(dev);
-	struct ad9854_state *st = iio_priv(indio_dev);
-	struct spi_device *spi = st->spi;
 	int ret;
+	struct spi_device *spi = st->spi;
+	struct ad9854_ser_reg *reg = &st->ser_regs[reg_addr];
+	u64 old_val = reg->reg_val;
 	u64 reg_val = cpu_to_be64(reg->reg_val);  // use MSB as default
 	char *data = (char *) &reg_val;
 	char tx_inst = AD9854_INST_ADDR_W(reg->reg_addr);
 	data += (8 - reg->reg_len);
 	// I/O reset before operation in order to synchronization with the AD9854
 	ad9854_io_reset(st);
-	dev_err(&st->spi->dev, "tx_inst: %d \n", tx_inst);
-	dev_err(&st->spi->dev, "REG : addr:%d, len:%d, val:%d. reg_val_conv:%llu\n", reg->reg_addr, reg->reg_len, reg->reg_val, reg_val);
+	dev_err(&spi->dev, "tx_inst: %d \n", tx_inst);
+	dev_err(&spi->dev, "REG : addr:%d, len:%d, val:%d. reg_val_conv:%llu\n", reg->reg_addr, reg->reg_len, reg->reg_val, reg_val);
 	int i = 0;
 	for (i = 0; i < reg->reg_len; ++i)
 	{
-		dev_err(&st->spi->dev, "data[%d]:0x%X\n", i, data[i]);
+		dev_err(&spi->dev, "data[%d]:0x%X\n", i, data[i]);
 	}
 	// write instruction
 	ret = spi_write(spi, &tx_inst, 1);
 	if (ret < 0) {
 		dev_err(&spi->dev, "SPI write instruction error\n");
+		reg->reg_val = old_val;  // write error, restore old value.
 		return ret;
 	}
 
 	ret = spi_write(spi, data, reg->reg_len);
 	if (ret < 0) {
 		dev_err(&spi->dev, "SPI write data error\n");
+		reg->reg_val = old_val;  // write error, restore old value.
 		return ret;
 	}
 	ad9854_io_update(st);
@@ -380,19 +379,71 @@ static ssize_t ad9854_read(struct device *dev,
 	case AD9854_REG_SER_OUTPUT_RAMP_RATE:
 	case AD9854_REG_SER_QDAC:
 		reg = &st->ser_regs[this_attr->address];
-		ret = ad9854_spi_read_reg(dev, reg);
+		ret = ad9854_spi_read_reg(st, this_attr->address);
+		if (!ret)
+			ret = sprintf(buf, "%llu\n", reg->reg_val);
 		break;
 	case AD9854_REG_SER_CTRL:
-	case AD9854_PHASE_SYM:
-	case AD9854_FREQ_SYM:
-	case AD9854_PINCTRL_EN:
-	case AD9854_OUTPUT_EN:
+		reg = &st->ser_regs[AD9854_REG_SER_CTRL];
+		ret = ad9854_spi_read_reg(st, AD9854_REG_SER_CTRL);
+		if (!ret) {
+			ret = sprintf(buf, "CR[31:0] = 0x%llX.\n\
+CR[0]: SDO active = %d.\n\
+CR[1]: LSB first = %d.\n\
+CR[4]: OSK INT = %d.\n\
+CR[5]: OSK EN = %d.\n\
+CR[6]: Bypass inv sinc = %d.\n\
+CR[8]: Int/Ext update clock = %d.\n\
+CR[9:11]: Mode = %d.\n\
+CR[12]: SRC QDAC = %d.\n\
+CR[13]: Triangle = %d.\n\
+CR[14]: CLR ACC2 = %d.\n\
+CR[15]: CLR ACC1 = %d.\n\
+CR[16:20]: Ref Mult = %d.\n\
+CR[21]: Bypass PLL = %d.\n\
+CR[22]: PLL range = %d.\n\
+CR[24]: DIG PD = %d.\n\
+CR[25]: DAC PD = %d.\n\
+CR[26]: QDAC PD = %d.\n\
+CR[27]: Reserved, always low = %d.\n\
+CR[28]: Comp PD = %d.\n\
+Others: Don't care.\n",
+			              reg->reg_val,
+			              (unsigned int)(reg->reg_val & CTRL_CR_SDO_ACTIVE) ? 1 : 0,
+			              (unsigned int)(reg->reg_val & CTRL_CR_LSB_FIRST) ? 1 : 0,
+			              (unsigned int)(reg->reg_val & CTRL_CR_OSK_INT) ? 1 : 0,
+			              (unsigned int)(reg->reg_val & CTRL_CR_OSK_EN) ? 1 : 0,
+			              (unsigned int)(reg->reg_val & CTRL_CR_BYPASS_INV_SINC) ? 1 : 0,
+			              (unsigned int)(reg->reg_val & CTRL_CR_IN_EXT_UP_CLK) ? 1 : 0,
+			              (unsigned int)(reg->reg_val & 0x00000E00) >> 9,
+			              (unsigned int)(reg->reg_val & CTRL_CR_SRC_QDAC) ? 1 : 0,
+			              (unsigned int)(reg->reg_val & CTRL_CR_TRIANGLE) ? 1 : 0,
+			              (unsigned int)(reg->reg_val & CTRL_CR_CLR_ACC_2) ? 1 : 0,
+			              (unsigned int)(reg->reg_val & CTRL_CR_CLR_ACC_1) ? 1 : 0,
+			              (unsigned int)(reg->reg_val & 0x001F0000) >> 16,
+			              (unsigned int)(reg->reg_val & CTRL_CR_BYPASS_PLL) ? 1 : 0,
+			              (unsigned int)(reg->reg_val & CTRL_CR_PLL_RANGE) ? 1 : 0,
+			              (unsigned int)(reg->reg_val & CTRL_CR_DIG_PD) ? 1 : 0,
+			              (unsigned int)(reg->reg_val & CTRL_CR_DAC_PD) ? 1 : 0,
+			              (unsigned int)(reg->reg_val & CTRL_CR_QDAC_PD) ? 1 : 0,
+			              (unsigned int)(reg->reg_val & (1 << 27)) ? 1 : 0,
+			              (unsigned int)(reg->reg_val & CTRL_CR_COMP_PD) ? 1 : 0);
+		}
+		break;
+	case AD9854_ATTR_OSK_EN:
+	case AD9854_ATTR_INVSINC_EN:
+	case AD9854_ATTR_MODES:
+	case AD9854_ATTR_RESET:
+	case AD9854_ATTR_PHASE_SYM:
+	case AD9854_ATTR_FREQ_SYM:
+	case AD9854_ATTR_PINCTRL_EN:
+	case AD9854_ATTR_OUTPUT_EN:
 	default:
 		ret = -ENODEV;
 	}
 	mutex_unlock(&indio_dev->mlock);
 
-	return ret < 0 ? ret : sprintf(buf, "%lld\n", reg->reg_val);
+	return ret;
 }
 
 static ssize_t ad9854_write(struct device *dev, struct device_attribute *attr,
@@ -427,15 +478,76 @@ static ssize_t ad9854_write(struct device *dev, struct device_attribute *attr,
 		reg = &st->ser_regs[this_attr->address];
 		old_val = reg->reg_val;
 		reg->reg_val = val;
-		ret = ad9854_spi_write_reg(dev, reg);
-		if (ret)
-			reg->reg_val = old_val;  // write error, restore old value.
+		ret = ad9854_spi_write_reg(st, this_attr->address);
+		break;
+	case AD9854_ATTR_OSK_EN:
+		reg = &st->ser_regs[AD9854_REG_SER_CTRL];
+		old_val = reg->reg_val;
+		if (val == 0) {
+			reg->reg_val &= ~CTRL_CR_OSK_EN;
+		}
+		else {
+			reg->reg_val |= CTRL_CR_OSK_EN;
+		}
+		ret = ad9854_spi_write_reg(st, AD9854_REG_SER_CTRL);
+		break;
+	case AD9854_ATTR_INVSINC_EN:
+		reg = &st->ser_regs[AD9854_REG_SER_CTRL];
+		old_val = reg->reg_val;
+		if (val == 0) {
+			reg->reg_val &= ~CTRL_CR_BYPASS_INV_SINC;
+		}
+		else {
+			reg->reg_val |= CTRL_CR_BYPASS_INV_SINC;
+		}
+		ret = ad9854_spi_write_reg(st, AD9854_REG_SER_CTRL);
+		break;
+	case AD9854_ATTR_MODES:
+		reg = &st->ser_regs[AD9854_REG_SER_CTRL];
+		old_val = reg->reg_val;
+		if (val < 5) {
+			reg->reg_val |= CTRL_CR_MODE_0 & (val << 9);
+			reg->reg_val |= CTRL_CR_MODE_1 & (val << 9);
+			reg->reg_val |= CTRL_CR_MODE_2 & (val << 9);
+		}
+		else {
+			dev_err(dev, "Mode 0x%8x is not supported.\n", val);
+		}
+		ret = ad9854_spi_write_reg(st, AD9854_REG_SER_CTRL);
+		break;
+	case AD9854_ATTR_RESET:
+		if (!val) {
+			ret = -EINVAL;
+			break;
+		}
+		ret = ad9854_master_reset(st);
+		if (!ret) {
+			st->ser_regs[AD9854_REG_SER_PHASE_ADJ_1].reg_val = 0x00;
+			st->ser_regs[AD9854_REG_SER_PHASE_ADJ_2].reg_val = 0x00;
+			st->ser_regs[AD9854_REG_SER_FREQ_TUNING_WORD_1].reg_val = 0x00;
+			st->ser_regs[AD9854_REG_SER_FREQ_TUNING_WORD_2].reg_val = 0x00;
+			st->ser_regs[AD9854_REG_SER_DELTA_FREQ_WORD].reg_val = 0x00;
+			st->ser_regs[AD9854_REG_SER_UPDATE_CLOCK].reg_val = 0x40;
+			st->ser_regs[AD9854_REG_SER_RAMP_RATE_CLOCK].reg_val = 0x00;
+			st->ser_regs[AD9854_REG_SER_CTRL].reg_val = AD9854_REG_SER_CTRL_DEFAULT_VAL;
+			st->ser_regs[AD9854_REG_SER_OUTPUT_I_MULTIPLIER].reg_val = 0x00;
+			st->ser_regs[AD9854_REG_SER_OUTPUT_Q_MULTIPLIER].reg_val = 0x00;
+			st->ser_regs[AD9854_REG_SER_OUTPUT_RAMP_RATE].reg_val = 0x80;
+			st->ser_regs[AD9854_REG_SER_QDAC].reg_val = 0x00;
+		}
+		else {
+			break;
+		}
+		ret = ad9854_ctrl_reg_init(st);
+		if (!ret) {
+			dev_info(dev, "AD9854 reset success.\n");
+		}
 		break;
 	case AD9854_REG_SER_CTRL:
-	case AD9854_PHASE_SYM:
-	case AD9854_FREQ_SYM:
-	case AD9854_PINCTRL_EN:
-	case AD9854_OUTPUT_EN:
+	case AD9854_ATTR_PHASE_SYM:
+	case AD9854_ATTR_FREQ_SYM:
+	case AD9854_ATTR_PINCTRL_EN:
+	case AD9854_ATTR_OUTPUT_EN:
 	default:
 		ret = -ENODEV;
 	}
@@ -447,7 +559,10 @@ error_ret:
 
 static int ad9854_ctrl_reg_init(struct ad9854_state *st)
 {
+	int ret;
 	struct ad9854_ser_reg *reg;
+	struct ad9854_platform_data *pdata = st->pdata;
+	struct spi_device *spi = st->spi;
 	reg = &st->ser_regs[AD9854_REG_SER_CTRL];
 	//reset control reg to default value
 	reg->reg_val = AD9854_REG_SER_CTRL_DEFAULT_VAL;
@@ -456,8 +571,70 @@ static int ad9854_ctrl_reg_init(struct ad9854_state *st)
 	// clear CR[8] to use externel update clk
 	reg->reg_val &= ~CTRL_CR_IN_EXT_UP_CLK;
 	// set ref multiplier
-	// if (refMultiplier * refClk) >=200MHz, set the PLL Bypass
-	//
+	reg->reg_val |= CTRL_CR_REF_MULT_0 & ((pdata->ref_mult) << 16);
+	reg->reg_val |= CTRL_CR_REF_MULT_1 & ((pdata->ref_mult) << 16);
+	reg->reg_val |= CTRL_CR_REF_MULT_2 & ((pdata->ref_mult) << 16);
+	reg->reg_val |= CTRL_CR_REF_MULT_3 & ((pdata->ref_mult) << 16);
+	reg->reg_val |= CTRL_CR_REF_MULT_4 & ((pdata->ref_mult) << 16);
+
+	pdata->ref_clk = 30000000;
+	pdata->ref_mult = 7;
+
+	// check pll bypass enable
+	if (pdata->en_pll_bypass) {
+		dev_info(&spi->dev, "PLL byPass is enable.\n");
+	}
+	else {
+		reg->reg_val &= ~CTRL_CR_BYPASS_PLL;
+		dev_info(&spi->dev, "PLL byPass is disable.\n");
+		// if (refMultiplier * refClk) >=200MHz, set the PLL range to enable VCO
+		if ((pdata->ref_clk) * (pdata->ref_mult) >= 200000000) {
+			reg->reg_val |= CTRL_CR_PLL_RANGE;
+			dev_info(&spi->dev, "PLL range is enable.\n");
+		}
+	}
+	ret = ad9854_spi_write_reg(st, AD9854_REG_SER_CTRL);
+	return ret;
+}
+
+static int ad9854_gpio_init(struct ad9854_state *st, int gpio)
+{
+	switch (gpio)
+	{
+	case 6:
+		if (gpio_is_valid(st->pdata->gpio_osk)) {
+			gpio_set_value(st->pdata->gpio_osk, 1);
+		}
+		break;
+	case 1:
+		if (gpio_is_valid(st->pdata->gpio_fsk_bpsk_hold)) {
+			gpio_set_value(st->pdata->gpio_fsk_bpsk_hold, 1);
+		}
+		break;
+	case 2:
+		if (gpio_is_valid(st->pdata->gpio_io_ud_clk)) {
+			gpio_set_value(st->pdata->gpio_io_ud_clk, 1);
+		}
+		break;
+	case 3:
+		if (gpio_is_valid(st->pdata->gpio_m_reset)) {
+			gpio_set_value(st->pdata->gpio_m_reset, 1);
+		}
+		break;
+	case 4:
+		if (gpio_is_valid(st->pdata->gpio_io_reset)) {
+			gpio_set_value(st->pdata->gpio_io_reset, 1);
+		}
+		break;
+	case 5:
+		if (gpio_is_valid(st->pdata->gpio_sp_select)) {
+			gpio_set_value(st->pdata->gpio_sp_select, 1);
+		}
+		break;
+	}
+	dev_info(&st->spi->dev, "GPIOs initialize finish.\n");
+
+	return 0;
 }
 
 /**
@@ -466,16 +643,16 @@ static int ad9854_ctrl_reg_init(struct ad9854_state *st)
 
 static IIO_DEV_ATTR_FREQ(0, 0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_REG_SER_FREQ_TUNING_WORD_1);
 static IIO_DEV_ATTR_FREQ(0, 1, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_REG_SER_FREQ_TUNING_WORD_2);
-static IIO_DEV_ATTR_FREQSYMBOL(0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_FREQ_SYM);
+//static IIO_DEV_ATTR_FREQSYMBOL(0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_ATTR_FREQ_SYM);
 static IIO_CONST_ATTR_FREQ_SCALE(0, "1"); /* 1Hz */
 
 static IIO_DEV_ATTR_PHASE(0, 0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_REG_SER_PHASE_ADJ_1);
 static IIO_DEV_ATTR_PHASE(0, 1, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_REG_SER_PHASE_ADJ_2);
-static IIO_DEV_ATTR_PHASESYMBOL(0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_PHASE_SYM);
+//static IIO_DEV_ATTR_PHASESYMBOL(0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_ATTR_PHASE_SYM);
 static IIO_CONST_ATTR_PHASE_SCALE(0, "0.0015339808"); /* 2PI/2^12 rad*/
 
-//static IIO_DEV_ATTR_PINCONTROL_EN(0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_PINCTRL_EN);
-//static IIO_DEV_ATTR_OUT_ENABLE(0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_OUTPUT_EN);
+//static IIO_DEV_ATTR_PINCONTROL_EN(0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_ATTR_PINCTRL_EN);
+//static IIO_DEV_ATTR_OUT_ENABLE(0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_ATTR_OUTPUT_EN);
 
 static IIO_DEV_ATTR_DELTAFREQ(0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_REG_SER_DELTA_FREQ_WORD);
 static IIO_DEV_ATTR_UPDATECLK(0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_REG_SER_UPDATE_CLOCK);
@@ -485,6 +662,12 @@ static IIO_DEV_ATTR_OSK_QMULTI(0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, 
 static IIO_DEV_ATTR_OSK_RAMPRATE(0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_REG_SER_OUTPUT_RAMP_RATE);
 static IIO_DEV_ATTR_QDAC(0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_REG_SER_QDAC);
 
+static IIO_DEV_ATTR_OSK_EN(0, S_IWUSR, NULL, ad9854_write, AD9854_ATTR_OSK_EN);
+static IIO_DEV_ATTR_INVSINC_EN(0, S_IWUSR, NULL, ad9854_write, AD9854_ATTR_INVSINC_EN);
+static IIO_DEV_ATTR_MODES(0, S_IWUSR, NULL, ad9854_write, AD9854_ATTR_MODES);
+static IIO_DEV_ATTR_RESET(0, S_IWUSR, NULL, ad9854_write, AD9854_ATTR_RESET);
+static IIO_DEV_ATTR_CTRLREG(0, S_IRUSR, ad9854_read, NULL, AD9854_REG_SER_CTRL);
+
 static struct attribute *ad9854_attributes[] = {
 	&iio_dev_attr_out_altvoltage0_frequency0.dev_attr.attr,
 	&iio_dev_attr_out_altvoltage0_frequency1.dev_attr.attr,
@@ -493,10 +676,9 @@ static struct attribute *ad9854_attributes[] = {
 	&iio_dev_attr_out_altvoltage0_phase1.dev_attr.attr,
 	&iio_const_attr_out_altvoltage0_phase_scale.dev_attr.attr,
 //	&iio_dev_attr_out_altvoltage0_pincontrol_en.dev_attr.attr,
-	&iio_dev_attr_out_altvoltage0_frequencysymbol.dev_attr.attr,
-	&iio_dev_attr_out_altvoltage0_phasesymbol.dev_attr.attr,
+//	&iio_dev_attr_out_altvoltage0_frequencysymbol.dev_attr.attr,
+//	&iio_dev_attr_out_altvoltage0_phasesymbol.dev_attr.attr,
 //	&iio_dev_attr_out_altvoltage0_out_enable.dev_attr.attr,
-
 	&iio_dev_attr_out_altvoltage0_deltafrequency.dev_attr.attr,
 	&iio_dev_attr_out_altvoltage0_updateclk.dev_attr.attr,
 	&iio_dev_attr_out_altvoltage0_ramprateclk.dev_attr.attr,
@@ -504,6 +686,12 @@ static struct attribute *ad9854_attributes[] = {
 	&iio_dev_attr_out_altvoltage0_osk_qmulti.dev_attr.attr,
 	&iio_dev_attr_out_altvoltage0_osk_ramprate.dev_attr.attr,
 	&iio_dev_attr_out_altvoltage0_qdac.dev_attr.attr,
+
+	&iio_dev_attr_out_altvoltage0_osk_en.dev_attr.attr,
+	&iio_dev_attr_out_altvoltage0_invsinc_en.dev_attr.attr,
+	&iio_dev_attr_out_altvoltage0_modes.dev_attr.attr,
+	&iio_dev_attr_out_altvoltage0_reset.dev_attr.attr,
+	&iio_dev_attr_out_altvoltage0_ctrlreg.dev_attr.attr,
 	NULL,
 };
 
@@ -651,6 +839,8 @@ struct iio_dev *ad9854_probe(struct device *dev,
 	if (ret)
 		dev_warn(&st->spi->dev, "Failed to RESET: no MASTER RESET GPIO specified\n");
 
+	ad9854_ctrl_reg_init(st);
+
 	ret = iio_device_register(indio_dev);
 	if (ret)
 		goto error_free_gpios;
@@ -667,7 +857,7 @@ error_disable_reg:
 }
 
 
-int ad9854_remove(struct iio_dev *indio_dev)
+static int ad9854_remove(struct iio_dev *indio_dev)
 {
 	struct ad9854_state *st = iio_priv(indio_dev);
 

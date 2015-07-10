@@ -26,10 +26,16 @@
 #define AD9854_REG_SER_OUTPUT_RAMP_RATE		0x0A
 #define AD9854_REG_SER_QDAC		0x0B
 
-#define AD9854_PHASE_SYM	0x30
-#define AD9854_FREQ_SYM		0x31
-#define AD9854_PINCTRL_EN	0x32
-#define AD9854_OUTPUT_EN	0x33
+#define AD9854_ATTR_PHASE_SYM		0x30
+#define AD9854_ATTR_FREQ_SYM		0x31
+#define AD9854_ATTR_PINCTRL_EN		0x32
+#define AD9854_ATTR_OUTPUT_EN		0x33
+
+#define AD9854_ATTR_OSK_EN		0x34
+#define AD9854_ATTR_INVSINC_EN		0x35
+#define AD9854_ATTR_MODES		0x36
+#define AD9854_ATTR_RESET		0x37
+
 
 /* Instruction byte */
 #define AD9854_INST_R		(1<<7)
@@ -122,19 +128,45 @@
 	IIO_DEVICE_ATTR(out_altvoltage##_channel##_qdac,	\
 			_mode, _show, _store, _addr)
 
-struct ad9854_ser_reg
-{
-	unsigned int reg_addr;
-	unsigned int reg_len;
-	u64 reg_val;
-};
+/**
+ * /sys/bus/iio/devices/.../out_altvoltageX_osk_en (just for ad9854)
+ */
 
-struct ad9854_bus_ops {
-	/* more methods added in future? */
-	int (*read_reg)(struct device *dev, struct ad9854_ser_reg *reg);
-	int (*write_reg)(struct device *dev, struct ad9854_ser_reg *reg);
-};
+#define IIO_DEV_ATTR_OSK_EN(_channel, _mode, _show, _store, _addr)	\
+	IIO_DEVICE_ATTR(out_altvoltage##_channel##_osk_en,	\
+			_mode, _show, _store, _addr)
 
+/**
+ * /sys/bus/iio/devices/.../out_altvoltageX_invsinc_en (just for ad9854)
+ */
+
+#define IIO_DEV_ATTR_INVSINC_EN(_channel, _mode, _show, _store, _addr)	\
+	IIO_DEVICE_ATTR(out_altvoltage##_channel##_invsinc_en,	\
+			_mode, _show, _store, _addr)
+
+/**
+ * /sys/bus/iio/devices/.../out_altvoltageX_modes (just for ad9854)
+ */
+
+#define IIO_DEV_ATTR_MODES(_channel, _mode, _show, _store, _addr)	\
+	IIO_DEVICE_ATTR(out_altvoltage##_channel##_modes,	\
+			_mode, _show, _store, _addr)
+
+/**
+ * /sys/bus/iio/devices/.../out_altvoltageX_reset (just for ad9854)
+ */
+
+#define IIO_DEV_ATTR_RESET(_channel, _mode, _show, _store, _addr)	\
+	IIO_DEVICE_ATTR(out_altvoltage##_channel##_reset,	\
+			_mode, _show, _store, _addr)
+
+/**
+ * /sys/bus/iio/devices/.../out_altvoltageX_ctrlreg (just for ad9854)
+ */
+
+#define IIO_DEV_ATTR_CTRLREG(_channel, _mode, _show, _store, _addr)	\
+	IIO_DEVICE_ATTR(out_altvoltage##_channel##_ctrlreg,	\
+			_mode, _show, _store, _addr)
 
 //struct ad9854_reg {
 //	char phase_adjust_reg_1_hl;		/* ad9854 Phase Adjust Register 1 <13:8> */
@@ -205,13 +237,10 @@ struct ad9854_bus_ops {
  */
 
 struct ad9854_platform_data {
-	unsigned int		mclk;
-	unsigned int		freq0;
-	unsigned int		freq1;
-	unsigned short		phase0;
-	unsigned short		phase1;
-	bool			en_div2;
-	bool			en_signbit_msb_out;
+	unsigned int		ref_clk;
+	unsigned int		ref_mult;
+	bool		en_lsb_first;
+	bool		en_pll_bypass;
 	unsigned		gpio_osk;
 	unsigned		gpio_fsk_bpsk_hold;
 	unsigned		gpio_io_ud_clk;
@@ -247,6 +276,19 @@ struct ad9854_state {
 	__be16				data ____cacheline_aligned;
 };
 
+struct ad9854_ser_reg
+{
+	unsigned int reg_addr;
+	unsigned int reg_len;
+	u64 reg_val;
+};
+
+struct ad9854_bus_ops {
+	/* more methods added in future? */
+	int (*read_reg)(struct ad9854_state *st, unsigned int reg_addr);
+	int (*write_reg)(struct ad9854_state *st, unsigned int reg_addr);
+};
+
 /**
  * ad9854_supported_device_ids:
  */
@@ -254,5 +296,13 @@ struct ad9854_state {
 enum ad9854_supported_device_ids {
 	ID_AD9854,
 };
+
+static int ad9854_io_reset(struct ad9854_state *st);
+static int ad9854_master_reset(struct ad9854_state *st);
+static int ad9854_io_update(struct ad9854_state *st);
+static int ad9854_spi_read_reg(struct ad9854_state *st, unsigned int reg_addr);
+static int ad9854_spi_write_reg(struct ad9854_state *st, unsigned int reg_addr);
+static int ad9854_ctrl_reg_init(struct ad9854_state *st);
+static int ad9854_gpio_init(struct ad9854_state *st, int gpio);
 
 #endif /* IIO_DDS_AD9854_H_ */
