@@ -319,6 +319,8 @@ enum adc_data_sel {
 /* debugfs direct register access */
 #define DEBUGFS_DRA_PCORE_REG_MAGIC	0x80000000
 
+#define AXIADC_MAX_CHANNEL		16
+
 #include <linux/spi/spi.h>
 
 enum {
@@ -332,6 +334,7 @@ enum {
 	ID_AD9434,
 	ID_AD9652,
 	ID_AD9234,
+	ID_AD9680_x2,
 };
 
 struct axiadc_chip_info {
@@ -343,7 +346,7 @@ struct axiadc_chip_info {
 	int				num_scales;
 	int				max_testmode;
 	unsigned long			max_rate;
-	struct iio_chan_spec		channel[8];
+	struct iio_chan_spec		channel[AXIADC_MAX_CHANNEL];
 };
 
 struct axiadc_state {
@@ -358,14 +361,13 @@ struct axiadc_state {
 	unsigned			pcore_version;
 	bool				has_fifo_interface;
 	bool			dp_disable;
-	unsigned char		testmode[2];
 	unsigned long 		adc_clk;
 	bool				streaming_dma;
 	unsigned			have_slave_channels;
 
 	struct iio_hw_consumer	*frontend;
 
-	struct iio_chan_spec	channels[16];
+	struct iio_chan_spec	channels[AXIADC_MAX_CHANNEL];
 };
 
 struct axiadc_converter {
@@ -376,7 +378,8 @@ struct axiadc_converter {
 	struct gpio_desc		*reset_gpio;
 	unsigned			id;
 	unsigned			adc_output_mode;
-	unsigned 		testmode[2];
+	unsigned 		testmode[AXIADC_MAX_CHANNEL];
+	unsigned			scratch_reg[AXIADC_MAX_CHANNEL];
 	unsigned long 		adc_clk;
 	const struct axiadc_chip_info	*chip_info;
 	int		(*read)(struct spi_device *spi, unsigned reg);
