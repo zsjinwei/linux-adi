@@ -116,6 +116,20 @@ struct ad9854_ser_reg ad9854_ser_reg_tbl[AD9854_REG_SER_SIZE] = {
 // 	     .osk_ramp_rate = 0x80,
 // };
 
+static unsigned int ad9854_ftw_to_freq(struct ad9854_state *st, u64 ftw)
+{
+	unsigned int sysclk = (st->pdata->ref_mult) * (st->pdata->ref_clk);
+	return (ftw * sysclk) >> 48;
+}
+
+static u64 ad9854_freq_to_ftw(struct ad9854_state *st, unsigned int freq)
+{
+	unsigned int sysclk = (st->pdata->ref_mult) * (st->pdata->ref_clk);
+	u64 result = ((u64)freq) << 48;
+	do_div(result, sysclk);
+	return result;
+}
+
 static int ad9854_io_reset(struct ad9854_state *st)
 {
 	if (gpio_is_valid(st->pdata->gpio_io_reset)) {
@@ -366,10 +380,15 @@ static ssize_t ad9854_read(struct device *dev,
 
 	mutex_lock(&indio_dev->mlock);
 	switch ((u32) this_attr->address) {
-	case AD9854_REG_SER_PHASE_ADJ_1:
-	case AD9854_REG_SER_PHASE_ADJ_2:
 	case AD9854_REG_SER_FREQ_TUNING_WORD_1:
 	case AD9854_REG_SER_FREQ_TUNING_WORD_2:
+		reg = &st->ser_regs[this_attr->address];
+		ret = ad9854_spi_read_reg(st, this_attr->address);
+		if (!ret)
+			ret = sprintf(buf, "%d\n", ad9854_ftw_to_freq(st, reg->reg_val));
+		break;
+	case AD9854_REG_SER_PHASE_ADJ_1:
+	case AD9854_REG_SER_PHASE_ADJ_2:
 	case AD9854_REG_SER_DELTA_FREQ_WORD:
 	case AD9854_REG_SER_UPDATE_CLOCK:
 	case AD9854_REG_SER_RAMP_RATE_CLOCK:
@@ -462,11 +481,15 @@ static ssize_t ad9854_write(struct device *dev, struct device_attribute *attr,
 
 	mutex_lock(&indio_dev->mlock);
 	switch ((u32) this_attr->address) {
-	case AD9854_REG_SER_PHASE_ADJ_1:
-	case AD9854_REG_SER_PHASE_ADJ_2:
 	case AD9854_REG_SER_FREQ_TUNING_WORD_1:
 	case AD9854_REG_SER_FREQ_TUNING_WORD_2:
-	// TODO : calc freq word
+		reg = &st->ser_regs[this_attr->address];
+		old_val = reg->reg_val;
+		reg->reg_val = ad9854_freq_to_ftw(st, val);
+		ret = ad9854_spi_write_reg(st, this_attr->address);
+		break;
+	case AD9854_REG_SER_PHASE_ADJ_1:
+	case AD9854_REG_SER_PHASE_ADJ_2:
 	case AD9854_REG_SER_DELTA_FREQ_WORD:
 	case AD9854_REG_SER_UPDATE_CLOCK:
 	case AD9854_REG_SER_RAMP_RATE_CLOCK:
@@ -495,10 +518,10 @@ static ssize_t ad9854_write(struct device *dev, struct device_attribute *attr,
 		reg = &st->ser_regs[AD9854_REG_SER_CTRL];
 		old_val = reg->reg_val;
 		if (val == 0) {
-			reg->reg_val &= ~CTRL_CR_BYPASS_INV_SINC;
+			reg->reg_val |= CTRL_CR_BYPASS_INV_SINC;
 		}
 		else {
-			reg->reg_val |= CTRL_CR_BYPASS_INV_SINC;
+			reg->reg_val &= ~CTRL_CR_BYPASS_INV_SINC;
 		}
 		ret = ad9854_spi_write_reg(st, AD9854_REG_SER_CTRL);
 		break;
@@ -577,8 +600,8 @@ static int ad9854_ctrl_reg_init(struct ad9854_state *st)
 	reg->reg_val |= CTRL_CR_REF_MULT_3 & ((pdata->ref_mult) << 16);
 	reg->reg_val |= CTRL_CR_REF_MULT_4 & ((pdata->ref_mult) << 16);
 
-	pdata->ref_clk = 30000000;
-	pdata->ref_mult = 7;
+	// QDAC power down
+	reg->reg_val &= ~CTRL_CR_QDAC_PD;
 
 	// check pll bypass enable
 	if (pdata->en_pll_bypass) {
@@ -720,11 +743,28 @@ ad9854_parse_dt(struct spi_device *spi)
 		return NULL; /* out of memory */
 
 	/* no such property */
-	// if (of_property_read_u32(node, "ad9854,default_os", &pdata->default_os) != 0)
-	// {
-	// 	dev_err(&spi->dev, "default_os property is not defined.\n");
-	// 	return NULL;
-	// }
+	if (of_property_read_u32(node, "ad9854,ref_mult", &pdata->ref_mult) != 0)
+	{
+		dev_err(&spi->dev, "ref_mult property is not defined.\n");
+		return NULL;
+	}
+
+	/* no such property */
+	if (of_property_read_u32(node, "ad9854,ref_clk", &pdata->ref_clk) != 0)
+	{
+		dev_err(&spi->dev, "ref_clk property is not defined.\n");
+		return NULL;
+	}
+
+	if (pdata->ref_mult < 4 || pdata->ref_mult > 20) {
+		pdata->ref_mult = 4;
+		dev_err(&spi->dev, "ref_mult property is invalid, set it to default(4).\n");
+	}
+
+	if ((pdata->ref_clk) * (pdata->ref_mult) > 300000000) {
+		dev_err(&spi->dev, "Invalid: ref_mult * ref_clk is bigger than 300MHz.\n");
+		return NULL;
+	}
 
 	/* now get the gpio number*/
 	gpio_osk = of_get_named_gpio(node, "ad9854,gpio_osk", 0);
@@ -787,7 +827,9 @@ ad9854_parse_dt(struct spi_device *spi)
 		pdata->gpio_sp_select = gpio_sp_select;
 	}
 
-	dev_info(&spi->dev, "DT parse result:\ngpio_osk = %d.\ngpio_fsk_bpsk_hold = %d.\ngpio_io_ud_clk = %d.\ngpio_m_reset = %d.\ngpio_io_reset = %d.\ngpio_sp_select = %d.\n",
+	dev_info(&spi->dev, "DT parse result:\nref_mult: %d.\nref_clk: %d.\ngpio_osk = %d.\ngpio_fsk_bpsk_hold = %d.\ngpio_io_ud_clk = %d.\ngpio_m_reset = %d.\ngpio_io_reset = %d.\ngpio_sp_select = %d.\n",
+	         pdata->ref_mult,
+	         pdata->ref_clk,
 	         pdata->gpio_osk,
 	         pdata->gpio_fsk_bpsk_hold,
 	         pdata->gpio_io_ud_clk,
