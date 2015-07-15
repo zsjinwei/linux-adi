@@ -35,7 +35,8 @@
 #define AD9854_ATTR_INVSINC_EN		0x35
 #define AD9854_ATTR_MODES		0x36
 #define AD9854_ATTR_RESET		0x37
-
+#define AD9854_ATTR_QDAC_PD		0x38
+#define AD9854_ATTR_DAC_PD		0x39
 
 /* Instruction byte */
 #define AD9854_INST_R		(1<<7)
@@ -126,6 +127,22 @@
 
 #define IIO_DEV_ATTR_QDAC(_channel, _mode, _show, _store, _addr)	\
 	IIO_DEVICE_ATTR(out_altvoltage##_channel##_qdac,	\
+			_mode, _show, _store, _addr)
+
+/**
+ * /sys/bus/iio/devices/.../out_altvoltageX_qdac (just for ad9854)
+ */
+
+#define IIO_DEV_ATTR_QDAC_PD(_channel, _mode, _show, _store, _addr)	\
+	IIO_DEVICE_ATTR(out_altvoltage##_channel##_qdac_pd,	\
+			_mode, _show, _store, _addr)
+
+/**
+* /sys/bus/iio/devices/.../out_altvoltageX_qdac (just for ad9854)
+*/
+
+#define IIO_DEV_ATTR_DAC_PD(_channel, _mode, _show, _store, _addr)	\
+	IIO_DEVICE_ATTR(out_altvoltage##_channel##_dac_pd,	\
 			_mode, _show, _store, _addr)
 
 /**
@@ -304,5 +321,6 @@ static int ad9854_spi_read_reg(struct ad9854_state *st, unsigned int reg_addr);
 static int ad9854_spi_write_reg(struct ad9854_state *st, unsigned int reg_addr);
 static int ad9854_ctrl_reg_init(struct ad9854_state *st);
 static int ad9854_gpio_init(struct ad9854_state *st, int gpio);
+static int ad9854_check_ser_reg_val(unsigned int reg_addr, u64 reg_val);
 
 #endif /* IIO_DDS_AD9854_H_ */

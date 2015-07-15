@@ -159,7 +159,7 @@ static int ad9854_io_update(struct ad9854_state *st)
 {
 	if (gpio_is_valid(st->pdata->gpio_io_ud_clk)) {
 		gpio_set_value(st->pdata->gpio_io_ud_clk, 1);
-		ndelay(50); /* t_reset >= 100ns */
+		ndelay(1000); /* t_reset >= 100ns */
 		gpio_set_value(st->pdata->gpio_io_ud_clk, 0);
 		return 0;
 	}
@@ -483,6 +483,11 @@ static ssize_t ad9854_write(struct device *dev, struct device_attribute *attr,
 	switch ((u32) this_attr->address) {
 	case AD9854_REG_SER_FREQ_TUNING_WORD_1:
 	case AD9854_REG_SER_FREQ_TUNING_WORD_2:
+		if (ad9854_check_ser_reg_val(this_attr->address, val))
+		{
+			ret = -EINVAL;
+			break;
+		}
 		reg = &st->ser_regs[this_attr->address];
 		old_val = reg->reg_val;
 		reg->reg_val = ad9854_freq_to_ftw(st, val);
@@ -498,6 +503,11 @@ static ssize_t ad9854_write(struct device *dev, struct device_attribute *attr,
 	case AD9854_REG_SER_OUTPUT_Q_MULTIPLIER:
 	case AD9854_REG_SER_OUTPUT_RAMP_RATE:
 	case AD9854_REG_SER_QDAC:
+		if (ad9854_check_ser_reg_val(this_attr->address, val))
+		{
+			ret = -EINVAL;
+			break;
+		}
 		reg = &st->ser_regs[this_attr->address];
 		old_val = reg->reg_val;
 		reg->reg_val = val;
@@ -566,6 +576,28 @@ static ssize_t ad9854_write(struct device *dev, struct device_attribute *attr,
 			dev_info(dev, "AD9854 reset success.\n");
 		}
 		break;
+	case AD9854_ATTR_QDAC_PD:
+		reg = &st->ser_regs[AD9854_REG_SER_CTRL];
+		old_val = reg->reg_val;
+		if (val == 0) {
+			reg->reg_val &= ~CTRL_CR_QDAC_PD;
+		}
+		else {
+			reg->reg_val |= CTRL_CR_QDAC_PD;
+		}
+		ret = ad9854_spi_write_reg(st, AD9854_REG_SER_CTRL);
+		break;
+	case AD9854_ATTR_DAC_PD:
+		reg = &st->ser_regs[AD9854_REG_SER_CTRL];
+		old_val = reg->reg_val;
+		if (val == 0) {
+			reg->reg_val &= ~CTRL_CR_DAC_PD;
+		}
+		else {
+			reg->reg_val |= CTRL_CR_DAC_PD;
+		}
+		ret = ad9854_spi_write_reg(st, AD9854_REG_SER_CTRL);
+		break;
 	case AD9854_REG_SER_CTRL:
 	case AD9854_ATTR_PHASE_SYM:
 	case AD9854_ATTR_FREQ_SYM:
@@ -578,6 +610,16 @@ static ssize_t ad9854_write(struct device *dev, struct device_attribute *attr,
 
 error_ret:
 	return ret ? ret : len;
+}
+
+static int ad9854_check_ser_reg_val(unsigned int reg_addr, u64 reg_val)
+{
+	const unsigned int reg_val_bits[AD9854_REG_SER_SIZE] = {14, 14, 48, 48, 48, 32, 20, 32, 12, 12, 8, 12};
+	if (reg_addr >= AD9854_REG_SER_SIZE)
+		return -EINVAL;
+	if (reg_val >= ((u64)1 << reg_val_bits[reg_addr]))
+		return -EINVAL;
+	return 0;
 }
 
 static int ad9854_ctrl_reg_init(struct ad9854_state *st)
@@ -593,7 +635,10 @@ static int ad9854_ctrl_reg_init(struct ad9854_state *st)
 	reg->reg_val |= CTRL_CR_SDO_ACTIVE;
 	// clear CR[8] to use externel update clk
 	reg->reg_val &= ~CTRL_CR_IN_EXT_UP_CLK;
+	// turn oof the inv sinc filter
+	reg->reg_val |= CTRL_CR_BYPASS_INV_SINC;
 	// set ref multiplier
+	reg->reg_val &= ~(CTRL_CR_REF_MULT_0 | CTRL_CR_REF_MULT_1 | CTRL_CR_REF_MULT_2 | CTRL_CR_REF_MULT_3);
 	reg->reg_val |= CTRL_CR_REF_MULT_0 & ((pdata->ref_mult) << 16);
 	reg->reg_val |= CTRL_CR_REF_MULT_1 & ((pdata->ref_mult) << 16);
 	reg->reg_val |= CTRL_CR_REF_MULT_2 & ((pdata->ref_mult) << 16);
@@ -601,7 +646,7 @@ static int ad9854_ctrl_reg_init(struct ad9854_state *st)
 	reg->reg_val |= CTRL_CR_REF_MULT_4 & ((pdata->ref_mult) << 16);
 
 	// QDAC power down
-	reg->reg_val &= ~CTRL_CR_QDAC_PD;
+	reg->reg_val |= CTRL_CR_QDAC_PD;
 
 	// check pll bypass enable
 	if (pdata->en_pll_bypass) {
@@ -672,7 +717,7 @@ static IIO_CONST_ATTR_FREQ_SCALE(0, "1"); /* 1Hz */
 static IIO_DEV_ATTR_PHASE(0, 0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_REG_SER_PHASE_ADJ_1);
 static IIO_DEV_ATTR_PHASE(0, 1, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_REG_SER_PHASE_ADJ_2);
 //static IIO_DEV_ATTR_PHASESYMBOL(0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_ATTR_PHASE_SYM);
-static IIO_CONST_ATTR_PHASE_SCALE(0, "0.0015339808"); /* 2PI/2^12 rad*/
+static IIO_CONST_ATTR_PHASE_SCALE(0, "0.0007669903939"); /* 2PI/2^12 rad*/
 
 //static IIO_DEV_ATTR_PINCONTROL_EN(0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_ATTR_PINCTRL_EN);
 //static IIO_DEV_ATTR_OUT_ENABLE(0, S_IWUSR | S_IRUSR, ad9854_read, ad9854_write, AD9854_ATTR_OUTPUT_EN);
@@ -690,6 +735,9 @@ static IIO_DEV_ATTR_INVSINC_EN(0, S_IWUSR, NULL, ad9854_write, AD9854_ATTR_INVSI
 static IIO_DEV_ATTR_MODES(0, S_IWUSR, NULL, ad9854_write, AD9854_ATTR_MODES);
 static IIO_DEV_ATTR_RESET(0, S_IWUSR, NULL, ad9854_write, AD9854_ATTR_RESET);
 static IIO_DEV_ATTR_CTRLREG(0, S_IRUSR, ad9854_read, NULL, AD9854_REG_SER_CTRL);
+
+static IIO_DEV_ATTR_QDAC_PD(0, S_IWUSR, NULL, ad9854_write, AD9854_ATTR_QDAC_PD);
+static IIO_DEV_ATTR_DAC_PD(0, S_IWUSR, NULL, ad9854_write, AD9854_ATTR_DAC_PD);
 
 static struct attribute *ad9854_attributes[] = {
 	&iio_dev_attr_out_altvoltage0_frequency0.dev_attr.attr,
@@ -715,6 +763,9 @@ static struct attribute *ad9854_attributes[] = {
 	&iio_dev_attr_out_altvoltage0_modes.dev_attr.attr,
 	&iio_dev_attr_out_altvoltage0_reset.dev_attr.attr,
 	&iio_dev_attr_out_altvoltage0_ctrlreg.dev_attr.attr,
+
+	&iio_dev_attr_out_altvoltage0_qdac_pd.dev_attr.attr,
+	&iio_dev_attr_out_altvoltage0_dac_pd.dev_attr.attr,
 	NULL,
 };
 
