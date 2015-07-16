@@ -79,7 +79,7 @@ ATTRIBUTE_GROUPS(spi_dev);
  */
 
 static const struct spi_device_id *spi_match_id(const struct spi_device_id *id,
-						const struct spi_device *sdev)
+        const struct spi_device *sdev)
 {
 	while (id->name[0]) {
 		if (!strcmp(sdev->modalias, id->name))
@@ -236,9 +236,9 @@ static const struct dev_pm_ops spi_pm = {
 	.poweroff = spi_pm_poweroff,
 	.restore = spi_pm_restore,
 	SET_RUNTIME_PM_OPS(
-		pm_generic_runtime_suspend,
-		pm_generic_runtime_resume,
-		NULL
+	    pm_generic_runtime_suspend,
+	    pm_generic_runtime_resume,
+	    NULL
 	)
 };
 
@@ -379,7 +379,7 @@ static void spi_dev_set_name(struct spi_device *spi)
 	}
 
 	dev_set_name(&spi->dev, "%s.%u", dev_name(&spi->master->dev),
-		     spi->chip_select);
+	             spi->chip_select);
 }
 
 static int spi_dev_check(struct device *dev, void *data)
@@ -388,7 +388,7 @@ static int spi_dev_check(struct device *dev, void *data)
 	struct spi_device *new_spi = data;
 
 	if (spi->master == new_spi->master &&
-	    spi->chip_select == new_spi->chip_select)
+	        spi->chip_select == new_spi->chip_select)
 		return -EBUSY;
 	return 0;
 }
@@ -411,8 +411,8 @@ int spi_add_device(struct spi_device *spi)
 	/* Chipselects are numbered 0..max; validate. */
 	if (spi->chip_select >= master->num_chipselect) {
 		dev_err(dev, "cs%d >= max %d\n",
-			spi->chip_select,
-			master->num_chipselect);
+		        spi->chip_select,
+		        master->num_chipselect);
 		return -EINVAL;
 	}
 
@@ -428,7 +428,7 @@ int spi_add_device(struct spi_device *spi)
 	status = bus_for_each_dev(&spi_bus_type, NULL, spi, spi_dev_check);
 	if (status) {
 		dev_err(dev, "chipselect %d already in use\n",
-				spi->chip_select);
+		        spi->chip_select);
 		goto done;
 	}
 
@@ -442,7 +442,7 @@ int spi_add_device(struct spi_device *spi)
 	status = spi_setup(spi);
 	if (status < 0) {
 		dev_err(dev, "can't setup %s, status %d\n",
-				dev_name(&spi->dev), status);
+		        dev_name(&spi->dev), status);
 		goto done;
 	}
 
@@ -450,7 +450,7 @@ int spi_add_device(struct spi_device *spi)
 	status = device_add(&spi->dev);
 	if (status < 0)
 		dev_err(dev, "can't add %s, status %d\n",
-				dev_name(&spi->dev), status);
+		        dev_name(&spi->dev), status);
 	else
 		dev_dbg(dev, "registered child %s\n", dev_name(&spi->dev));
 
@@ -475,7 +475,7 @@ EXPORT_SYMBOL_GPL(spi_add_device);
  * Returns the new device, or NULL.
  */
 struct spi_device *spi_new_device(struct spi_master *master,
-				  struct spi_board_info *chip)
+                                  struct spi_board_info *chip)
 {
 	struct spi_device	*proxy;
 	int			status;
@@ -513,7 +513,7 @@ struct spi_device *spi_new_device(struct spi_master *master,
 EXPORT_SYMBOL_GPL(spi_new_device);
 
 static void spi_match_master_to_boardinfo(struct spi_master *master,
-				struct spi_board_info *bi)
+        struct spi_board_info *bi)
 {
 	struct spi_device *dev;
 
@@ -523,7 +523,7 @@ static void spi_match_master_to_boardinfo(struct spi_master *master,
 	dev = spi_new_device(master, bi);
 	if (!dev)
 		dev_err(master->dev.parent, "can't create new device for %s\n",
-			bi->modalias);
+		        bi->modalias);
 }
 
 /**
@@ -564,7 +564,7 @@ int spi_register_board_info(struct spi_board_info const *info, unsigned n)
 		mutex_lock(&board_lock);
 		list_add_tail(&bi->list, &board_list);
 		list_for_each_entry(master, &spi_master_list, list)
-			spi_match_master_to_boardinfo(master, &bi->board_info);
+		spi_match_master_to_boardinfo(master, &bi->board_info);
 		mutex_unlock(&board_lock);
 	}
 
@@ -586,8 +586,8 @@ static void spi_set_cs(struct spi_device *spi, bool enable)
 
 #ifdef CONFIG_HAS_DMA
 static int spi_map_buf(struct spi_master *master, struct device *dev,
-		       struct sg_table *sgt, void *buf, size_t len,
-		       enum dma_data_direction dir)
+                       struct sg_table *sgt, void *buf, size_t len,
+                       enum dma_data_direction dir)
 {
 	const bool vmalloced_buf = is_vmalloc_addr(buf);
 	const int desc_len = vmalloced_buf ? PAGE_SIZE : master->max_dma_len;
@@ -611,7 +611,7 @@ static int spi_map_buf(struct spi_master *master, struct device *dev,
 				return -ENOMEM;
 			}
 			sg_set_page(&sgt->sgl[i], vm_page,
-				    min, offset_in_page(buf));
+			            min, offset_in_page(buf));
 		} else {
 			sg_buf = buf;
 			sg_set_buf(&sgt->sgl[i], sg_buf, min);
@@ -636,7 +636,7 @@ static int spi_map_buf(struct spi_master *master, struct device *dev,
 }
 
 static void spi_unmap_buf(struct spi_master *master, struct device *dev,
-			  struct sg_table *sgt, enum dma_data_direction dir)
+                          struct sg_table *sgt, enum dma_data_direction dir)
 {
 	if (sgt->orig_nents) {
 		dma_unmap_sg(dev, sgt->sgl, sgt->orig_nents, dir);
@@ -662,19 +662,19 @@ static int __spi_map_msg(struct spi_master *master, struct spi_message *msg)
 
 		if (xfer->tx_buf != NULL) {
 			ret = spi_map_buf(master, tx_dev, &xfer->tx_sg,
-					  (void *)xfer->tx_buf, xfer->len,
-					  DMA_TO_DEVICE);
+			                  (void *)xfer->tx_buf, xfer->len,
+			                  DMA_TO_DEVICE);
 			if (ret != 0)
 				return ret;
 		}
 
 		if (xfer->rx_buf != NULL) {
 			ret = spi_map_buf(master, rx_dev, &xfer->rx_sg,
-					  xfer->rx_buf, xfer->len,
-					  DMA_FROM_DEVICE);
+			                  xfer->rx_buf, xfer->len,
+			                  DMA_FROM_DEVICE);
 			if (ret != 0) {
 				spi_unmap_buf(master, tx_dev, &xfer->tx_sg,
-					      DMA_TO_DEVICE);
+				              DMA_TO_DEVICE);
 				return ret;
 			}
 		}
@@ -708,13 +708,13 @@ static int spi_unmap_msg(struct spi_master *master, struct spi_message *msg)
 }
 #else /* !CONFIG_HAS_DMA */
 static inline int __spi_map_msg(struct spi_master *master,
-				struct spi_message *msg)
+                                struct spi_message *msg)
 {
 	return 0;
 }
 
 static inline int spi_unmap_msg(struct spi_master *master,
-				struct spi_message *msg)
+                                struct spi_message *msg)
 {
 	return 0;
 }
@@ -732,16 +732,16 @@ static int spi_map_msg(struct spi_master *master, struct spi_message *msg)
 
 		list_for_each_entry(xfer, &msg->transfers, transfer_list) {
 			if ((master->flags & SPI_MASTER_MUST_TX) &&
-			    !xfer->tx_buf)
+			        !xfer->tx_buf)
 				max_tx = max(xfer->len, max_tx);
 			if ((master->flags & SPI_MASTER_MUST_RX) &&
-			    !xfer->rx_buf)
+			        !xfer->rx_buf)
 				max_rx = max(xfer->len, max_rx);
 		}
 
 		if (max_tx) {
 			tmp = krealloc(master->dummy_tx, max_tx,
-				       GFP_KERNEL | GFP_DMA);
+			               GFP_KERNEL | GFP_DMA);
 			if (!tmp)
 				return -ENOMEM;
 			master->dummy_tx = tmp;
@@ -750,7 +750,7 @@ static int spi_map_msg(struct spi_master *master, struct spi_message *msg)
 
 		if (max_rx) {
 			tmp = krealloc(master->dummy_rx, max_rx,
-				       GFP_KERNEL | GFP_DMA);
+			               GFP_KERNEL | GFP_DMA);
 			if (!tmp)
 				return -ENOMEM;
 			master->dummy_rx = tmp;
@@ -758,7 +758,7 @@ static int spi_map_msg(struct spi_master *master, struct spi_message *msg)
 
 		if (max_tx || max_rx) {
 			list_for_each_entry(xfer, &msg->transfers,
-					    transfer_list) {
+			                    transfer_list) {
 				if (!xfer->tx_buf)
 					xfer->tx_buf = master->dummy_tx;
 				if (!xfer->rx_buf)
@@ -778,7 +778,7 @@ static int spi_map_msg(struct spi_master *master, struct spi_message *msg)
  * standard handling of delays and chip select management.
  */
 static int spi_transfer_one_message(struct spi_master *master,
-				    struct spi_message *msg)
+                                    struct spi_message *msg)
 {
 	struct spi_transfer *xfer;
 	bool keep_cs = false;
@@ -796,7 +796,7 @@ static int spi_transfer_one_message(struct spi_master *master,
 			ret = master->transfer_one(master, msg->spi, xfer);
 			if (ret < 0) {
 				dev_err(&msg->spi->dev,
-					"SPI transfer failed: %d\n", ret);
+				        "SPI transfer failed: %d\n", ret);
 				goto out;
 			}
 
@@ -806,19 +806,19 @@ static int spi_transfer_one_message(struct spi_master *master,
 				ms += ms + 100; /* some tolerance */
 
 				ms = wait_for_completion_timeout(&master->xfer_completion,
-								 msecs_to_jiffies(ms));
+				                                 msecs_to_jiffies(ms));
 			}
 
 			if (ms == 0) {
 				dev_err(&msg->spi->dev,
-					"SPI transfer timed out\n");
+				        "SPI transfer timed out\n");
 				msg->status = -ETIMEDOUT;
 			}
 		} else {
 			if (xfer->len)
 				dev_err(&msg->spi->dev,
-					"Bufferless transfer has length %u\n",
-					xfer->len);
+				        "Bufferless transfer has length %u\n",
+				        xfer->len);
 		}
 
 		trace_spi_transfer_stop(msg, xfer);
@@ -831,7 +831,7 @@ static int spi_transfer_one_message(struct spi_master *master,
 
 		if (xfer->cs_change) {
 			if (list_is_last(&xfer->transfer_list,
-					 &msg->transfers)) {
+			                 &msg->transfers)) {
 				keep_cs = true;
 			} else {
 				spi_set_cs(msg->spi, false);
@@ -914,7 +914,7 @@ static void __spi_pump_messages(struct spi_master *master, bool in_kthread)
 		/* Only do teardown in the thread */
 		if (!in_kthread) {
 			queue_kthread_work(&master->kworker,
-					   &master->pump_messages);
+			                   &master->pump_messages);
 			spin_unlock_irqrestore(&master->queue_lock, flags);
 			return;
 		}
@@ -928,9 +928,9 @@ static void __spi_pump_messages(struct spi_master *master, bool in_kthread)
 		kfree(master->dummy_tx);
 		master->dummy_tx = NULL;
 		if (master->unprepare_transfer_hardware &&
-		    master->unprepare_transfer_hardware(master))
+		        master->unprepare_transfer_hardware(master))
 			dev_err(&master->dev,
-				"failed to unprepare transfer hardware\n");
+			        "failed to unprepare transfer hardware\n");
 		if (master->auto_runtime_pm) {
 			pm_runtime_mark_last_busy(master->dev.parent);
 			pm_runtime_put_autosuspend(master->dev.parent);
@@ -945,7 +945,7 @@ static void __spi_pump_messages(struct spi_master *master, bool in_kthread)
 
 	/* Extract head of queue */
 	master->cur_msg =
-		list_first_entry(&master->queue, struct spi_message, queue);
+	    list_first_entry(&master->queue, struct spi_message, queue);
 
 	list_del_init(&master->cur_msg->queue);
 	if (master->busy)
@@ -958,7 +958,7 @@ static void __spi_pump_messages(struct spi_master *master, bool in_kthread)
 		ret = pm_runtime_get_sync(master->dev.parent);
 		if (ret < 0) {
 			dev_err(&master->dev, "Failed to power device: %d\n",
-				ret);
+			        ret);
 			return;
 		}
 	}
@@ -970,7 +970,7 @@ static void __spi_pump_messages(struct spi_master *master, bool in_kthread)
 		ret = master->prepare_transfer_hardware(master);
 		if (ret) {
 			dev_err(&master->dev,
-				"failed to prepare transfer hardware\n");
+			        "failed to prepare transfer hardware\n");
 
 			if (master->auto_runtime_pm)
 				pm_runtime_put(master->dev.parent);
@@ -984,7 +984,7 @@ static void __spi_pump_messages(struct spi_master *master, bool in_kthread)
 		ret = master->prepare_message(master, master->cur_msg);
 		if (ret) {
 			dev_err(&master->dev,
-				"failed to prepare message: %d\n", ret);
+			        "failed to prepare message: %d\n", ret);
 			master->cur_msg->status = ret;
 			spi_finalize_current_message(master);
 			return;
@@ -1002,7 +1002,7 @@ static void __spi_pump_messages(struct spi_master *master, bool in_kthread)
 	ret = master->transfer_one_message(master, master->cur_msg);
 	if (ret) {
 		dev_err(&master->dev,
-			"failed to transfer one message from queue\n");
+		        "failed to transfer one message from queue\n");
 		return;
 	}
 }
@@ -1014,7 +1014,7 @@ static void __spi_pump_messages(struct spi_master *master, bool in_kthread)
 static void spi_pump_messages(struct kthread_work *work)
 {
 	struct spi_master *master =
-		container_of(work, struct spi_master, pump_messages);
+	    container_of(work, struct spi_master, pump_messages);
 
 	__spi_pump_messages(master, true);
 }
@@ -1028,8 +1028,8 @@ static int spi_init_queue(struct spi_master *master)
 
 	init_kthread_worker(&master->kworker);
 	master->kworker_task = kthread_run(kthread_worker_fn,
-					   &master->kworker, "%s",
-					   dev_name(&master->dev));
+	                                   &master->kworker, "%s",
+	                                   dev_name(&master->dev));
 	if (IS_ERR(master->kworker_task)) {
 		dev_err(&master->dev, "failed to create message pump task\n");
 		return PTR_ERR(master->kworker_task);
@@ -1045,7 +1045,7 @@ static int spi_init_queue(struct spi_master *master)
 	 */
 	if (master->rt) {
 		dev_info(&master->dev,
-			"will run message pump with realtime priority\n");
+		         "will run message pump with realtime priority\n");
 		sched_setscheduler(master->kworker_task, SCHED_FIFO, &param);
 	}
 
@@ -1068,7 +1068,7 @@ struct spi_message *spi_get_next_queued_message(struct spi_master *master)
 	/* get a pointer to the next message, if any */
 	spin_lock_irqsave(&master->queue_lock, flags);
 	next = list_first_entry_or_null(&master->queue, struct spi_message,
-					queue);
+	                                queue);
 	spin_unlock_irqrestore(&master->queue_lock, flags);
 
 	return next;
@@ -1101,7 +1101,7 @@ void spi_finalize_current_message(struct spi_master *master)
 		ret = master->unprepare_message(master, mesg);
 		if (ret) {
 			dev_err(&master->dev,
-				"failed to unprepare message: %d\n", ret);
+			        "failed to unprepare message: %d\n", ret);
 		}
 	}
 
@@ -1164,7 +1164,7 @@ static int spi_stop_queue(struct spi_master *master)
 
 	if (ret) {
 		dev_warn(&master->dev,
-			 "could not stop message queue\n");
+		         "could not stop message queue\n");
 		return ret;
 	}
 	return ret;
@@ -1194,8 +1194,8 @@ static int spi_destroy_queue(struct spi_master *master)
 }
 
 static int __spi_queued_transfer(struct spi_device *spi,
-				 struct spi_message *msg,
-				 bool need_pump)
+                                 struct spi_message *msg,
+                                 bool need_pump)
 {
 	struct spi_master *master = spi->master;
 	unsigned long flags;
@@ -1270,17 +1270,17 @@ of_register_spi_device(struct spi_master *master, struct device_node *nc)
 	spi = spi_alloc_device(master);
 	if (!spi) {
 		dev_err(&master->dev, "spi_device alloc error for %s\n",
-			nc->full_name);
+		        nc->full_name);
 		rc = -ENOMEM;
 		goto err_out;
 	}
 
 	/* Select device driver */
 	rc = of_modalias_node(nc, spi->modalias,
-				sizeof(spi->modalias));
+	                      sizeof(spi->modalias));
 	if (rc < 0) {
 		dev_err(&master->dev, "cannot find modalias for %s\n",
-			nc->full_name);
+		        nc->full_name);
 		goto err_out;
 	}
 
@@ -1288,7 +1288,7 @@ of_register_spi_device(struct spi_master *master, struct device_node *nc)
 	rc = of_property_read_u32(nc, "reg", &value);
 	if (rc) {
 		dev_err(&master->dev, "%s has no valid 'reg' property (%d)\n",
-			nc->full_name, rc);
+		        nc->full_name, rc);
 		goto err_out;
 	}
 	spi->chip_select = value;
@@ -1318,8 +1318,8 @@ of_register_spi_device(struct spi_master *master, struct device_node *nc)
 			break;
 		default:
 			dev_warn(&master->dev,
-				"spi-tx-bus-width %d not supported\n",
-				value);
+			         "spi-tx-bus-width %d not supported\n",
+			         value);
 			break;
 		}
 	}
@@ -1336,8 +1336,8 @@ of_register_spi_device(struct spi_master *master, struct device_node *nc)
 			break;
 		default:
 			dev_warn(&master->dev,
-				"spi-rx-bus-width %d not supported\n",
-				value);
+			         "spi-rx-bus-width %d not supported\n",
+			         value);
 			break;
 		}
 	}
@@ -1346,7 +1346,7 @@ of_register_spi_device(struct spi_master *master, struct device_node *nc)
 	rc = of_property_read_u32(nc, "spi-max-frequency", &value);
 	if (rc) {
 		dev_err(&master->dev, "%s has no valid 'spi-max-frequency' property (%d)\n",
-			nc->full_name, rc);
+		        nc->full_name, rc);
 		goto err_out;
 	}
 	spi->max_speed_hz = value;
@@ -1363,7 +1363,7 @@ of_register_spi_device(struct spi_master *master, struct device_node *nc)
 	rc = spi_add_device(spi);
 	if (rc) {
 		dev_err(&master->dev, "spi_device register error %s\n",
-			nc->full_name);
+		        nc->full_name);
 		goto err_out;
 	}
 
@@ -1393,7 +1393,7 @@ static void of_register_spi_devices(struct spi_master *master)
 		spi = of_register_spi_device(master, nc);
 		if (IS_ERR(spi))
 			dev_warn(&master->dev, "Failed to create SPI device for %s\n",
-				nc->full_name);
+			         nc->full_name);
 	}
 }
 #else
@@ -1432,7 +1432,7 @@ static int acpi_spi_add_resource(struct acpi_resource *ares, void *data)
 }
 
 static acpi_status acpi_spi_add_device(acpi_handle handle, u32 level,
-				       void *data, void **return_value)
+                                       void *data, void **return_value)
 {
 	struct spi_master *master = data;
 	struct list_head resource_list;
@@ -1448,7 +1448,7 @@ static acpi_status acpi_spi_add_device(acpi_handle handle, u32 level,
 	spi = spi_alloc_device(master);
 	if (!spi) {
 		dev_err(&master->dev, "failed to allocate SPI device for %s\n",
-			dev_name(&adev->dev));
+		        dev_name(&adev->dev));
 		return AE_NO_MEMORY;
 	}
 
@@ -1457,7 +1457,7 @@ static acpi_status acpi_spi_add_device(acpi_handle handle, u32 level,
 
 	INIT_LIST_HEAD(&resource_list);
 	ret = acpi_dev_get_resources(adev, &resource_list,
-				     acpi_spi_add_resource, spi);
+	                             acpi_spi_add_resource, spi);
 	acpi_dev_free_resource_list(&resource_list);
 
 	if (ret < 0 || !spi->max_speed_hz) {
@@ -1470,7 +1470,7 @@ static acpi_status acpi_spi_add_device(acpi_handle handle, u32 level,
 	if (spi_add_device(spi)) {
 		adev->power.flags.ignore_parent = false;
 		dev_err(&master->dev, "failed to add SPI device %s from ACPI\n",
-			dev_name(&adev->dev));
+		        dev_name(&adev->dev));
 		spi_dev_put(spi);
 	}
 
@@ -1487,8 +1487,8 @@ static void acpi_register_spi_devices(struct spi_master *master)
 		return;
 
 	status = acpi_walk_namespace(ACPI_TYPE_DEVICE, handle, 1,
-				     acpi_spi_add_device, NULL,
-				     master, NULL);
+	                             acpi_spi_add_device, NULL,
+	                             master, NULL);
 	if (ACPI_FAILURE(status))
 		dev_warn(&master->dev, "failed to enumerate SPI slaves\n");
 }
@@ -1505,10 +1505,10 @@ static void spi_master_release(struct device *dev)
 }
 
 static struct class spi_master_class = {
-	.name		= "spi_master",
-	.owner		= THIS_MODULE,
-	.dev_release	= spi_master_release,
-};
+		.name		= "spi_master",
+		.owner		= THIS_MODULE,
+		.dev_release	= spi_master_release,
+	};
 
 
 
@@ -1573,8 +1573,8 @@ static int of_spi_register_master(struct spi_master *master)
 		return nb;
 
 	cs = devm_kzalloc(&master->dev,
-			  sizeof(int) * master->num_chipselect,
-			  GFP_KERNEL);
+	                  sizeof(int) * master->num_chipselect,
+	                  GFP_KERNEL);
 	master->cs_gpios = cs;
 
 	if (!master->cs_gpios)
@@ -1617,7 +1617,7 @@ static int of_spi_register_master(struct spi_master *master)
  */
 int spi_register_master(struct spi_master *master)
 {
-	static atomic_t		dyn_bus_id = ATOMIC_INIT((1<<15) - 1);
+	static atomic_t		dyn_bus_id = ATOMIC_INIT((1 << 15) - 1);
 	struct device		*dev = master->dev.parent;
 	struct boardinfo	*bi;
 	int			status = -ENODEV;
@@ -1667,7 +1667,7 @@ int spi_register_master(struct spi_master *master)
 	if (status < 0)
 		goto done;
 	dev_dbg(dev, "registered master %s%s\n", dev_name(&master->dev),
-			dynamic ? " (dynamic)" : "");
+	        dynamic ? " (dynamic)" : "");
 
 	/* If we're using a queued driver, start the queue */
 	if (master->transfer)
@@ -1683,7 +1683,7 @@ int spi_register_master(struct spi_master *master)
 	mutex_lock(&board_lock);
 	list_add_tail(&master->list, &spi_master_list);
 	list_for_each_entry(bi, &board_list, list)
-		spi_match_master_to_boardinfo(master, &bi->board_info);
+	spi_match_master_to_boardinfo(master, &bi->board_info);
 	mutex_unlock(&board_lock);
 
 	/* Register devices from the device tree and ACPI */
@@ -1819,7 +1819,7 @@ struct spi_master *spi_busnum_to_master(u16 bus_num)
 	struct spi_master	*master = NULL;
 
 	dev = class_find_device(&spi_master_class, NULL, &bus_num,
-				__spi_master_match);
+	                        __spi_master_match);
 	if (dev)
 		master = container_of(dev, struct spi_master, dev);
 	/* reference got in class_find_device */
@@ -1860,32 +1860,32 @@ int spi_setup(struct spi_device *spi)
 	/* check mode to prevent that DUAL and QUAD set at the same time
 	 */
 	if (((spi->mode & SPI_TX_DUAL) && (spi->mode & SPI_TX_QUAD)) ||
-		((spi->mode & SPI_RX_DUAL) && (spi->mode & SPI_RX_QUAD))) {
+	        ((spi->mode & SPI_RX_DUAL) && (spi->mode & SPI_RX_QUAD))) {
 		dev_err(&spi->dev,
-		"setup: can not select dual and quad at the same time\n");
+		        "setup: can not select dual and quad at the same time\n");
 		return -EINVAL;
 	}
 	/* if it is SPI_3WIRE mode, DUAL and QUAD should be forbidden
 	 */
 	if ((spi->mode & SPI_3WIRE) && (spi->mode &
-		(SPI_TX_DUAL | SPI_TX_QUAD | SPI_RX_DUAL | SPI_RX_QUAD)))
+	                                (SPI_TX_DUAL | SPI_TX_QUAD | SPI_RX_DUAL | SPI_RX_QUAD)))
 		return -EINVAL;
 	/* help drivers fail *cleanly* when they need options
 	 * that aren't supported with their current master
 	 */
 	bad_bits = spi->mode & ~spi->master->mode_bits;
 	ugly_bits = bad_bits &
-		    (SPI_TX_DUAL | SPI_TX_QUAD | SPI_RX_DUAL | SPI_RX_QUAD);
+	            (SPI_TX_DUAL | SPI_TX_QUAD | SPI_RX_DUAL | SPI_RX_QUAD);
 	if (ugly_bits) {
 		dev_warn(&spi->dev,
-			 "setup: ignoring unsupported mode bits %x\n",
-			 ugly_bits);
+		         "setup: ignoring unsupported mode bits %x\n",
+		         ugly_bits);
 		spi->mode &= ~ugly_bits;
 		bad_bits &= ~ugly_bits;
 	}
 	if (bad_bits) {
 		dev_err(&spi->dev, "setup: unsupported mode bits %x\n",
-			bad_bits);
+		        bad_bits);
 		return -EINVAL;
 	}
 
@@ -1899,13 +1899,13 @@ int spi_setup(struct spi_device *spi)
 		status = spi->master->setup(spi);
 
 	dev_dbg(&spi->dev, "setup mode %d, %s%s%s%s%u bits/w, %u Hz max --> %d\n",
-			(int) (spi->mode & (SPI_CPOL | SPI_CPHA)),
-			(spi->mode & SPI_CS_HIGH) ? "cs_high, " : "",
-			(spi->mode & SPI_LSB_FIRST) ? "lsb, " : "",
-			(spi->mode & SPI_3WIRE) ? "3wire, " : "",
-			(spi->mode & SPI_LOOP) ? "loopback, " : "",
-			spi->bits_per_word, spi->max_speed_hz,
-			status);
+	        (int) (spi->mode & (SPI_CPOL | SPI_CPHA)),
+	        (spi->mode & SPI_CS_HIGH) ? "cs_high, " : "",
+	        (spi->mode & SPI_LSB_FIRST) ? "lsb, " : "",
+	        (spi->mode & SPI_3WIRE) ? "3wire, " : "",
+	        (spi->mode & SPI_LOOP) ? "loopback, " : "",
+	        spi->bits_per_word, spi->max_speed_hz,
+	        status);
 
 	return status;
 }
@@ -1926,7 +1926,7 @@ static int __spi_validate(struct spi_device *spi, struct spi_message *message)
 	 * software limitations.
 	 */
 	if ((master->flags & SPI_MASTER_HALF_DUPLEX)
-			|| (spi->mode & SPI_3WIRE)) {
+	        || (spi->mode & SPI_3WIRE)) {
 		unsigned flags = master->flags;
 
 		list_for_each_entry(xfer, &message->transfers, transfer_list) {
@@ -1954,7 +1954,7 @@ static int __spi_validate(struct spi_device *spi, struct spi_message *message)
 			xfer->speed_hz = spi->max_speed_hz;
 
 		if (master->max_speed_hz &&
-		    xfer->speed_hz > master->max_speed_hz)
+		        xfer->speed_hz > master->max_speed_hz)
 			xfer->speed_hz = master->max_speed_hz;
 
 		if (master->bits_per_word_mask) {
@@ -1962,7 +1962,7 @@ static int __spi_validate(struct spi_device *spi, struct spi_message *message)
 			if (xfer->bits_per_word > 32)
 				return -EINVAL;
 			if (!(master->bits_per_word_mask &
-					BIT(xfer->bits_per_word - 1)))
+			        BIT(xfer->bits_per_word - 1)))
 				return -EINVAL;
 		}
 
@@ -1982,7 +1982,7 @@ static int __spi_validate(struct spi_device *spi, struct spi_message *message)
 			return -EINVAL;
 
 		if (xfer->speed_hz && master->min_speed_hz &&
-		    xfer->speed_hz < master->min_speed_hz)
+		        xfer->speed_hz < master->min_speed_hz)
 			return -EINVAL;
 
 		if (xfer->tx_buf && !xfer->tx_nbits)
@@ -1995,27 +1995,27 @@ static int __spi_validate(struct spi_device *spi, struct spi_message *message)
 		 */
 		if (xfer->tx_buf) {
 			if (xfer->tx_nbits != SPI_NBITS_SINGLE &&
-				xfer->tx_nbits != SPI_NBITS_DUAL &&
-				xfer->tx_nbits != SPI_NBITS_QUAD)
+			        xfer->tx_nbits != SPI_NBITS_DUAL &&
+			        xfer->tx_nbits != SPI_NBITS_QUAD)
 				return -EINVAL;
 			if ((xfer->tx_nbits == SPI_NBITS_DUAL) &&
-				!(spi->mode & (SPI_TX_DUAL | SPI_TX_QUAD)))
+			        !(spi->mode & (SPI_TX_DUAL | SPI_TX_QUAD)))
 				return -EINVAL;
 			if ((xfer->tx_nbits == SPI_NBITS_QUAD) &&
-				!(spi->mode & SPI_TX_QUAD))
+			        !(spi->mode & SPI_TX_QUAD))
 				return -EINVAL;
 		}
 		/* check transfer rx_nbits */
 		if (xfer->rx_buf) {
 			if (xfer->rx_nbits != SPI_NBITS_SINGLE &&
-				xfer->rx_nbits != SPI_NBITS_DUAL &&
-				xfer->rx_nbits != SPI_NBITS_QUAD)
+			        xfer->rx_nbits != SPI_NBITS_DUAL &&
+			        xfer->rx_nbits != SPI_NBITS_QUAD)
 				return -EINVAL;
 			if ((xfer->rx_nbits == SPI_NBITS_DUAL) &&
-				!(spi->mode & (SPI_RX_DUAL | SPI_RX_QUAD)))
+			        !(spi->mode & (SPI_RX_DUAL | SPI_RX_QUAD)))
 				return -EINVAL;
 			if ((xfer->rx_nbits == SPI_NBITS_QUAD) &&
-				!(spi->mode & SPI_RX_QUAD))
+			        !(spi->mode & SPI_RX_QUAD))
 				return -EINVAL;
 		}
 	}
@@ -2152,7 +2152,7 @@ static void spi_complete(void *arg)
 }
 
 static int __spi_sync(struct spi_device *spi, struct spi_message *message,
-		      int bus_locked)
+                      int bus_locked)
 {
 	DECLARE_COMPLETION_ONSTACK(done);
 	int status;
@@ -2332,8 +2332,8 @@ static u8	*buf;
  * spi_{async,sync}() calls with dma-safe buffers.
  */
 int spi_write_then_read(struct spi_device *spi,
-		const void *txbuf, unsigned n_tx,
-		void *rxbuf, unsigned n_rx)
+                        const void *txbuf, unsigned n_tx,
+                        void *rxbuf, unsigned n_rx)
 {
 	static DEFINE_MUTEX(lock);
 
@@ -2349,7 +2349,7 @@ int spi_write_then_read(struct spi_device *spi,
 	 */
 	if ((n_tx + n_rx) > SPI_BUFSIZ || !mutex_trylock(&lock)) {
 		local_buf = kmalloc(max((unsigned)SPI_BUFSIZ, n_tx + n_rx),
-				    GFP_KERNEL | GFP_DMA);
+		                    GFP_KERNEL | GFP_DMA);
 		if (!local_buf)
 			return -ENOMEM;
 	} else {
@@ -2397,7 +2397,7 @@ static int __spi_of_device_match(struct device *dev, void *data)
 static struct spi_device *of_find_spi_device_by_node(struct device_node *node)
 {
 	struct device *dev = bus_find_device(&spi_bus_type, NULL, node,
-						__spi_of_device_match);
+	                                     __spi_of_device_match);
 	return dev ? to_spi_device(dev) : NULL;
 }
 
@@ -2412,7 +2412,7 @@ static struct spi_master *of_find_spi_master_by_node(struct device_node *node)
 	struct device *dev;
 
 	dev = class_find_device(&spi_master_class, NULL, node,
-				__spi_of_master_match);
+	                        __spi_of_master_match);
 	if (!dev)
 		return NULL;
 
@@ -2421,7 +2421,7 @@ static struct spi_master *of_find_spi_master_by_node(struct device_node *node)
 }
 
 static int of_spi_notify(struct notifier_block *nb, unsigned long action,
-			 void *arg)
+                         void *arg)
 {
 	struct of_reconfig_data *rd = arg;
 	struct spi_master *master;
@@ -2438,7 +2438,7 @@ static int of_spi_notify(struct notifier_block *nb, unsigned long action,
 
 		if (IS_ERR(spi)) {
 			pr_err("%s: failed to create for '%s'\n",
-					__func__, rd->dn->full_name);
+			       __func__, rd->dn->full_name);
 			return notifier_from_errno(PTR_ERR(spi));
 		}
 		break;
