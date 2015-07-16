@@ -271,6 +271,7 @@
  * @gpio_m_reset:		master reset Pin number, necessary
  * @gpio_io_reset:		I/O reset Pin number, necessary
  * @gpio_sp_select:		S/P select Pin number, set it to -1 if not uses
+ * @gpio_spi_scs:		SPI software CS pin, set it to -1 if not uses
  */
 struct ad9854_platform_data {
 	unsigned int		ref_clk;
@@ -283,6 +284,7 @@ struct ad9854_platform_data {
 	unsigned		gpio_m_reset;
 	unsigned		gpio_io_reset;
 	unsigned		gpio_sp_select;
+	unsigned		gpio_spi_scs;
 };
 
 /**
@@ -343,6 +345,8 @@ static u64 ad9854_freq_to_ftw(struct ad9854_state *st, unsigned int freq);
 static int ad9854_io_reset(struct ad9854_state *st);
 static int ad9854_master_reset(struct ad9854_state *st);
 static int ad9854_io_update(struct ad9854_state *st);
+static int ad9854_spi_scs_low(struct ad9854_state *st);
+static int ad9854_spi_scs_high(struct ad9854_state *st);
 static int ad9854_request_gpios(struct ad9854_state *st);
 static void ad9854_free_gpios(struct ad9854_state *st);
 static int ad9854_spi_read_reg(struct ad9854_state *st, unsigned int reg_addr);

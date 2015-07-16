@@ -184,6 +184,38 @@ static int ad9854_io_update(struct ad9854_state *st)
 }
 
 /**
+ * set gpio spi software cs pin to logic-low
+ * @param  st struct ad9854_state
+ * @return    0 - success
+ *            -ENODEV - spi software cs Pin is not define
+ */
+static int ad9854_spi_scs_low(struct ad9854_state *st)
+{
+	if (gpio_is_valid(st->pdata->gpio_spi_scs)) {
+		gpio_set_value(st->pdata->gpio_spi_scs, 0);
+		return 0;
+	}
+
+	return -ENODEV;
+}
+
+/**
+ * set gpio spi software cs pin to logic-high
+ * @param  st struct ad9854_state
+ * @return    0 - success
+ *            -ENODEV - spi software cs Pin is not define
+ */
+static int ad9854_spi_scs_high(struct ad9854_state *st)
+{
+	if (gpio_is_valid(st->pdata->gpio_spi_scs)) {
+		gpio_set_value(st->pdata->gpio_spi_scs, 1);
+		return 0;
+	}
+
+	return -ENODEV;
+}
+
+/**
  * request gpios defined in ad9854_platform_data
  * @param  st struct ad9854_state
  * @return    request result: 0 - success
@@ -228,6 +260,15 @@ static int ad9854_request_gpios(struct ad9854_state *st)
 		}
 	}
 
+	if (gpio_is_valid(st->pdata->gpio_spi_scs)) {
+		ret = gpio_request_one(st->pdata->gpio_spi_scs,
+		                       GPIOF_OUT_INIT_HIGH,
+		                       "AD9854_SPI_SCS");
+		if (ret) {
+			dev_info(&st->spi->dev, "failed to request GPIO SPI Software CS\n");
+		}
+	}
+
 	if (gpio_is_valid(st->pdata->gpio_m_reset)) {
 		ret = gpio_request_one(st->pdata->gpio_m_reset,
 		                       GPIOF_OUT_INIT_LOW,
@@ -261,14 +302,16 @@ error_io_reset:
 	if (gpio_is_valid(st->pdata->gpio_m_reset))
 		gpio_free(st->pdata->gpio_m_reset);
 error_m_reset:
+	if (gpio_is_valid(st->pdata->gpio_spi_scs))
+		gpio_free(st->pdata->gpio_spi_scs);
+	if (gpio_is_valid(st->pdata->gpio_sp_select))
+		gpio_free(st->pdata->gpio_sp_select);
 	if (gpio_is_valid(st->pdata->gpio_io_ud_clk))
 		gpio_free(st->pdata->gpio_io_ud_clk);
 	if (gpio_is_valid(st->pdata->gpio_fsk_bpsk_hold))
 		gpio_free(st->pdata->gpio_fsk_bpsk_hold);
 	if (gpio_is_valid(st->pdata->gpio_osk))
 		gpio_free(st->pdata->gpio_osk);
-	if (gpio_is_valid(st->pdata->gpio_sp_select))
-		gpio_free(st->pdata->gpio_sp_select);
 
 	return ret;
 }
@@ -279,6 +322,8 @@ error_m_reset:
  */
 static void ad9854_free_gpios(struct ad9854_state *st)
 {
+	if (gpio_is_valid(st->pdata->gpio_spi_scs))
+		gpio_free(st->pdata->gpio_spi_scs);
 	if (gpio_is_valid(st->pdata->gpio_sp_select))
 		gpio_free(st->pdata->gpio_sp_select);
 	if (gpio_is_valid(st->pdata->gpio_io_reset))
@@ -313,9 +358,14 @@ static int ad9854_spi_read_reg(struct ad9854_state *st, unsigned int reg_addr)
 	//dev_info(&st->spi->dev, "tx_inst: 0x%X \n", tx_inst);
 	//dev_info(&st->spi->dev, "REG : addr:0x%X, len:0x%X, val:0x%X\n", reg->reg_addr, reg->reg_len, reg->reg_val);
 	// I/O reset before operation in order to synchronization with the AD9854
+	// enable CS pin
+	ad9854_spi_scs_low(st);
+	// do io reset
 	ad9854_io_reset(st);
 	// write instruction and read
 	ret = spi_write_then_read(spi, &tx_inst, 1, data, reg->reg_len);
+	// disable CS pin
+	ad9854_spi_scs_high(st);
 	if (ret < 0) {
 		dev_err(&spi->dev, "SPI read error\n");
 		return ret;
@@ -344,6 +394,8 @@ static int ad9854_spi_write_reg(struct ad9854_state *st, unsigned int reg_addr)
 	char *data = (char *) &reg_val;
 	char tx_inst = AD9854_INST_ADDR_W(reg->reg_addr);
 	data += (8 - reg->reg_len);
+	// enable CS pin
+	ad9854_spi_scs_low(st);
 	// I/O reset before operation in order to synchronization with the AD9854
 	ad9854_io_reset(st);
 	//dev_err(&spi->dev, "tx_inst: %d \n", tx_inst);
@@ -366,6 +418,8 @@ static int ad9854_spi_write_reg(struct ad9854_state *st, unsigned int reg_addr)
 		reg->reg_val = old_val;  // write error, restore old value.
 		return ret;
 	}
+	// disable CS pin
+	ad9854_spi_scs_high(st);
 	ad9854_io_update(st);
 	return 0;
 }
@@ -773,6 +827,7 @@ ad9854_parse_dt(struct spi_device *spi)
 	unsigned gpio_m_reset;
 	unsigned gpio_io_reset;
 	unsigned gpio_sp_select;
+	unsigned gpio_spi_scs;
 	pdata = devm_kzalloc(&spi->dev, sizeof(*pdata), GFP_KERNEL);
 	if (pdata == NULL)
 		return NULL; /* out of memory */
@@ -861,8 +916,17 @@ ad9854_parse_dt(struct spi_device *spi)
 	{
 		pdata->gpio_sp_select = gpio_sp_select;
 	}
-
-	dev_info(&spi->dev, "DT parse result:\nref_mult: %d.\nref_clk: %d.\ngpio_osk = %d.\ngpio_fsk_bpsk_hold = %d.\ngpio_io_ud_clk = %d.\ngpio_m_reset = %d.\ngpio_io_reset = %d.\ngpio_sp_select = %d.\n",
+	/* now get the gpio number*/
+	gpio_spi_scs = of_get_named_gpio(node, "ad9854,gpio_spi_scs", 0);
+	if (IS_ERR_VALUE(gpio_spi_scs)) {
+		dev_warn(&spi->dev, "gpio_spi_scs can not setup, set it to -1.\n");
+		pdata->gpio_spi_scs = -1;
+	}
+	else
+	{
+		pdata->gpio_spi_scs = gpio_spi_scs;
+	}
+	dev_info(&spi->dev, "DT parse result:\nref_mult: %d.\nref_clk: %d.\ngpio_osk = %d.\ngpio_fsk_bpsk_hold = %d.\ngpio_io_ud_clk = %d.\ngpio_m_reset = %d.\ngpio_io_reset = %d.\ngpio_sp_select = %d.\ngpio_spi_scs = %d.\n",
 	         pdata->ref_mult,
 	         pdata->ref_clk,
 	         pdata->gpio_osk,
@@ -870,7 +934,8 @@ ad9854_parse_dt(struct spi_device *spi)
 	         pdata->gpio_io_ud_clk,
 	         pdata->gpio_m_reset,
 	         pdata->gpio_io_reset,
-	         pdata->gpio_sp_select);
+	         pdata->gpio_sp_select,
+	         pdata->gpio_spi_scs);
 	/* pdata is filled */
 	return pdata;
 }

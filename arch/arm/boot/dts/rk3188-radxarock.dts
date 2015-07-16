@@ -414,6 +414,9 @@
 		gpio_sp_select: gpio-sp-select {
 			rockchip,pins = <RK_GPIO1 13 RK_FUNC_GPIO &pcfg_pull_none>; 
 		};
+		gpio_spi_scs: gpio-spi-scs {
+			rockchip,pins = <RK_GPIO0 8 RK_FUNC_GPIO &pcfg_pull_none>; 
+		};
 	};
 };
 
@@ -463,6 +466,7 @@
 		ad9854,gpio_m_reset = <&gpio1 10 GPIO_ACTIVE_LOW>;
 		ad9854,gpio_io_reset = <&gpio1 11 GPIO_ACTIVE_LOW>;
 		ad9854,gpio_sp_select = <&gpio1 13 GPIO_ACTIVE_LOW>;
+		ad9854,gpio_spi_scs = <&gpio0 8 GPIO_ACTIVE_HIGH>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&gpio_osk &gpio_fsk_bpsk_hold &gpio_io_ud_clk &gpio_m_reset &gpio_io_reset &gpio_sp_select>;
 	};
