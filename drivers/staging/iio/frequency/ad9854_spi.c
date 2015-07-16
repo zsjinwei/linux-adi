@@ -224,14 +224,14 @@ static int ad9854_request_gpios(struct ad9854_state *st)
 {
 	int ret;
 
-	if (gpio_is_valid(st->spi->cs_gpio)) {
-		ret = gpio_request_one(st->spi->cs_gpio,
-		                       GPIOF_OUT_INIT_HIGH,
-		                       "AD9854_OSK");
-		if (ret) {
-			dev_err(&st->spi->dev, "failed to request AD9854 SPI CS pin\n");
-		}
-	}
+	// if (gpio_is_valid(st->spi->cs_gpio)) {
+	// 	ret = gpio_request_one(st->spi->cs_gpio,
+	// 	                       GPIOF_OUT_INIT_HIGH,
+	// 	                       "AD9854_OSK");
+	// 	if (ret) {
+	// 		dev_err(&st->spi->dev, "failed to request AD9854 SPI CS pin\n");
+	// 	}
+	// }
 
 	if (gpio_is_valid(st->pdata->gpio_osk)) {
 		ret = gpio_request_one(st->pdata->gpio_osk,
