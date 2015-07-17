@@ -27,6 +27,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/io.h>
 #include <linux/dmaengine.h>
+#include <linux/gpio.h>
 
 #define DRIVER_NAME "rockchip-spi"
 
@@ -264,6 +265,7 @@ static inline u32 rx_max(struct rockchip_spi *rs)
 static void rockchip_spi_set_cs(struct spi_device *spi, bool enable)
 {
 	u32 ser;
+	unsigned cs_gpio;
 	struct rockchip_spi *rs = spi_master_get_devdata(spi->master);
 
 	ser = readl_relaxed(rs->regs + ROCKCHIP_SPI_SER) & SER_MASK;
@@ -283,16 +285,28 @@ static void rockchip_spi_set_cs(struct spi_device *spi, bool enable)
 	 *
 	 * Note: enable(rockchip_spi_set_cs) = !enable(spi_set_cs)
 	 */
+	//if chip_select is bigger than 1, set it to 0.
+	//Otherwise, it may cause device always busy mistake.
+	if (spi->chip_select > 1) {
+		spi->chip_select = 0;
+	}
 	if (!enable)
 		ser |= 1 << spi->chip_select;
 	else
 		ser &= ~(1 << spi->chip_select);
 
 	writel_relaxed(ser, rs->regs + ROCKCHIP_SPI_SER);
+
+	if (spi->controller_data) {
+		cs_gpio = *(int *)(spi->controller_data);
+		if (gpio_is_valid(cs_gpio)) {
+			gpio_set_value(cs_gpio, enable);
+		}
+	}
 }
 
 static int rockchip_spi_prepare_message(struct spi_master *master,
-					struct spi_message *msg)
+                                        struct spi_message *msg)
 {
 	struct rockchip_spi *rs = spi_master_get_devdata(master);
 	struct spi_device *spi = msg->spi;
@@ -303,7 +317,7 @@ static int rockchip_spi_prepare_message(struct spi_master *master,
 }
 
 static int rockchip_spi_unprepare_message(struct spi_master *master,
-					  struct spi_message *msg)
+        struct spi_message *msg)
 {
 	unsigned long flags;
 	struct rockchip_spi *rs = spi_master_get_devdata(master);
@@ -446,9 +460,9 @@ static void rockchip_spi_prepare_dma(struct rockchip_spi *rs)
 		dmaengine_slave_config(rs->dma_rx.ch, &rxconf);
 
 		rxdesc = dmaengine_prep_slave_sg(
-				rs->dma_rx.ch,
-				rs->rx_sg.sgl, rs->rx_sg.nents,
-				rs->dma_rx.direction, DMA_PREP_INTERRUPT);
+		             rs->dma_rx.ch,
+		             rs->rx_sg.sgl, rs->rx_sg.nents,
+		             rs->dma_rx.direction, DMA_PREP_INTERRUPT);
 
 		rxdesc->callback = rockchip_spi_dma_rxcb;
 		rxdesc->callback_param = rs;
@@ -463,9 +477,9 @@ static void rockchip_spi_prepare_dma(struct rockchip_spi *rs)
 		dmaengine_slave_config(rs->dma_tx.ch, &txconf);
 
 		txdesc = dmaengine_prep_slave_sg(
-				rs->dma_tx.ch,
-				rs->tx_sg.sgl, rs->tx_sg.nents,
-				rs->dma_tx.direction, DMA_PREP_INTERRUPT);
+		             rs->dma_tx.ch,
+		             rs->tx_sg.sgl, rs->tx_sg.nents,
+		             rs->dma_tx.direction, DMA_PREP_INTERRUPT);
 
 		txdesc->callback = rockchip_spi_dma_txcb;
 		txdesc->callback_param = rs;
@@ -495,7 +509,7 @@ static void rockchip_spi_config(struct rockchip_spi *rs)
 	u32 dmacr = 0;
 
 	u32 cr0 = (CR0_BHT_8BIT << CR0_BHT_OFFSET)
-		| (CR0_SSD_ONE << CR0_SSD_OFFSET);
+	          | (CR0_SSD_ONE << CR0_SSD_OFFSET);
 
 	cr0 |= (rs->n_bytes << CR0_DFS_OFFSET);
 	cr0 |= ((rs->mode & 0x3) << CR0_SCPH_OFFSET);
@@ -538,15 +552,15 @@ static void rockchip_spi_config(struct rockchip_spi *rs)
 }
 
 static int rockchip_spi_transfer_one(
-		struct spi_master *master,
-		struct spi_device *spi,
-		struct spi_transfer *xfer)
+    struct spi_master *master,
+    struct spi_device *spi,
+    struct spi_transfer *xfer)
 {
 	int ret = 1;
 	struct rockchip_spi *rs = spi_master_get_devdata(master);
 
 	WARN_ON(readl_relaxed(rs->regs + ROCKCHIP_SPI_SSIENR) &&
-		(readl_relaxed(rs->regs + ROCKCHIP_SPI_SR) & SR_BUSY));
+	        (readl_relaxed(rs->regs + ROCKCHIP_SPI_SR) & SR_BUSY));
 
 	if (!xfer->tx_buf && !xfer->rx_buf) {
 		dev_err(rs->dev, "No buffer for transfer\n");
@@ -600,12 +614,40 @@ static int rockchip_spi_transfer_one(
 }
 
 static bool rockchip_spi_can_dma(struct spi_master *master,
-				 struct spi_device *spi,
-				 struct spi_transfer *xfer)
+                                 struct spi_device *spi,
+                                 struct spi_transfer *xfer)
 {
 	struct rockchip_spi *rs = spi_master_get_devdata(master);
 
 	return (xfer->len > rs->fifo_len);
+}
+
+static int rockchip_spi_setup(struct spi_device * spi)
+{
+	int ret = 0;
+	if (spi->cs_gpio >= 0) {
+		if (gpio_is_valid(spi->cs_gpio)) {
+			ret = gpio_request_one(spi->cs_gpio,
+			                       GPIOF_OUT_INIT_HIGH,
+			                       dev_name(&spi->dev));
+			if (ret) {
+				dev_err(&spi->dev, "failed to request SPI CS pin\n");
+			}
+			else {
+				// Purpose: get cs_gpio from dts, but in spi.c, if spi->cs_gpio >0
+				// spi->master->set_cs will not execute (this will cause spi always in wait state).
+				// So, we assign the spi->cs_gpio to spi->controller_data, and set
+				// spi->cs_gpio to -2. Then spi->master->set_cs will execute,
+				// and we can set or reset cs_gpio pin by gpio_set_value function through
+				// spi->controller_data.
+				spi->controller_data = (int *)kzalloc(sizeof(int), GFP_KERNEL);
+				*(int *)(spi->controller_data) = spi->cs_gpio;
+				spi->cs_gpio = -2;
+			}
+		}
+	}
+
+	return ret;
 }
 
 static int rockchip_spi_probe(struct platform_device *pdev)
@@ -684,6 +726,7 @@ static int rockchip_spi_probe(struct platform_device *pdev)
 	master->dev.of_node = pdev->dev.of_node;
 	master->bits_per_word_mask = SPI_BPW_MASK(16) | SPI_BPW_MASK(8);
 
+	master->setup = rockchip_spi_setup;
 	master->set_cs = rockchip_spi_set_cs;
 	master->prepare_message = rockchip_spi_prepare_message;
 	master->unprepare_message = rockchip_spi_unprepare_message;
@@ -834,7 +877,7 @@ static int rockchip_spi_runtime_resume(struct device *dev)
 static const struct dev_pm_ops rockchip_spi_pm = {
 	SET_SYSTEM_SLEEP_PM_OPS(rockchip_spi_suspend, rockchip_spi_resume)
 	SET_RUNTIME_PM_OPS(rockchip_spi_runtime_suspend,
-			   rockchip_spi_runtime_resume, NULL)
+	rockchip_spi_runtime_resume, NULL)
 };
 
 static const struct of_device_id rockchip_spi_dt_match[] = {
