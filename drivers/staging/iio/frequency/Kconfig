@@ -23,8 +23,8 @@ config AD9834
 	  To compile this driver as a module, choose M here: the
 	  module will be called ad9834.
 
-config AD9854
-	tristate "Analog Devices AD9854 driver"
+config AD9854_SPI
+	tristate "Analog Devices AD9854 SPI driver"
 	depends on SPI
 	help
 	  Say yes here to build support for Analog Devices DDS chip
