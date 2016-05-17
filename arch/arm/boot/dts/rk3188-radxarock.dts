@@ -147,7 +147,24 @@
 };
 
 &i2c0 {
-	status = "disabled";
+	status = "okay";
+	clock-frequency = <100000>;
+	/*dpot@2c{
+		compatible = "ad5242";
+		reg = <0x2c>;
+	};
+	dpot@2d{
+		compatible = "ad5242";
+		reg = <0x2d>;
+	};*/
+	dpot@2e{
+		compatible = "ad5242";
+		reg = <0x2e>;
+	};
+	dpot@2f{
+		compatible = "ad5242";
+		reg = <0x2f>;
+	};
 };
 
 &i2c1 {
@@ -396,12 +413,12 @@
 	};
 
 	ad9854 {
-		gpio_osk: gpio-osk {
+		/*gpio_osk: gpio-osk {
 			rockchip,pins = <RK_GPIO1 24 RK_FUNC_GPIO &pcfg_pull_none>; 
 		};
 		gpio_fsk_bpsk_hold: gpio-fsk-bpsk-hold {
 			rockchip,pins = <RK_GPIO1 25 RK_FUNC_GPIO &pcfg_pull_none>; 
-		};
+		};*/
 		gpio_io_ud_clk: gpio-io-ud-clk {
 			rockchip,pins = <RK_GPIO1 12 RK_FUNC_GPIO &pcfg_pull_none>; 
 		};
@@ -411,10 +428,10 @@
 		gpio_io_reset: gpio-io-reset {
 			rockchip,pins = <RK_GPIO1 11 RK_FUNC_GPIO &pcfg_pull_none>; 
 		};
-		gpio_sp_select: gpio-sp-select {
+		/*gpio_sp_select: gpio-sp-select {
 			rockchip,pins = <RK_GPIO1 13 RK_FUNC_GPIO &pcfg_pull_none>; 
 		};
-		/*gpio_spi_scs: gpio-spi-scs {
+		gpio_spi_scs: gpio-spi-scs {
 			rockchip,pins = <RK_GPIO0 8 RK_FUNC_GPIO &pcfg_pull_none>; 
 		};*/
 	};
@@ -422,6 +439,18 @@
 	spi1 {
 		spi1_cs2: spi1-cs2 {
 			rockchip,pins = <RK_GPIO0 8 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+		spi1_cs3: spi1-cs3 {
+			rockchip,pins = <RK_GPIO1 1 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+		spi1_cs4: spi1-cs4 {
+			rockchip,pins = <RK_GPIO1 3 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+		spi1_cs5: spi1-cs5 {
+			rockchip,pins = <RK_GPIO1 0 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+		spi1_cs6: spi1-cs6 {
+			rockchip,pins = <RK_GPIO1 13 RK_FUNC_GPIO &pcfg_pull_up>;
 		};
 	};
 };
@@ -461,7 +490,7 @@
 	/*#address-cells = <1>;
 	#size-cells = <0>;
 	num-cs = <3>;*/
-	cs-gpios = <0>, <0>, <&gpio0 8 GPIO_ACTIVE_HIGH>, <&gpio1 0 GPIO_ACTIVE_HIGH>, <&gpio1 1 GPIO_ACTIVE_HIGH>;
+	cs-gpios = <0>, <0>, <&gpio0 8 GPIO_ACTIVE_HIGH>, <&gpio1 1 GPIO_ACTIVE_HIGH>, <&gpio1 3 GPIO_ACTIVE_HIGH>, <&gpio1 0 GPIO_ACTIVE_HIGH>, <&gpio1 13 GPIO_ACTIVE_HIGH>;
 
 	dds@2{
 		compatible = "adi,ad9854";
@@ -469,27 +498,47 @@
 		spi-max-frequency = <1000000>;
 		ad9854,ref_clk = <30000000>;
 		ad9854,ref_mult = <10>;
-		ad9854,gpio_osk = <&gpio1 24 GPIO_ACTIVE_LOW>;
-		ad9854,gpio_fsk_bpsk_hold = <&gpio1 25 GPIO_ACTIVE_LOW>;
+		/*ad9854,gpio_osk = <&gpio1 24 GPIO_ACTIVE_LOW>;
+		ad9854,gpio_fsk_bpsk_hold = <&gpio1 25 GPIO_ACTIVE_LOW>;*/
 		ad9854,gpio_io_ud_clk = <&gpio1 12 GPIO_ACTIVE_LOW>;
 		ad9854,gpio_m_reset = <&gpio1 10 GPIO_ACTIVE_LOW>;
 		ad9854,gpio_io_reset = <&gpio1 11 GPIO_ACTIVE_LOW>;
-		ad9854,gpio_sp_select = <&gpio1 13 GPIO_ACTIVE_LOW>;
+		/*ad9854,gpio_sp_select = <&gpio1 13 GPIO_ACTIVE_LOW>;*/
 		/*ad9854,gpio_spi_scs = <&gpio0 8 GPIO_ACTIVE_HIGH>;*/
 		pinctrl-names = "default";
-		pinctrl-0 = <&gpio_osk &gpio_fsk_bpsk_hold &gpio_io_ud_clk &gpio_m_reset &gpio_io_reset &gpio_sp_select>;
+		pinctrl-0 = <&gpio_io_ud_clk &gpio_m_reset &gpio_io_reset>;
 	};
 
 	dpot@3{
 		compatible = "ad5235";
 		reg = <3>;
 		spi-max-frequency = <1000000>;
+		spi-cpha;
+		spi-cpol;
 	};
 
 	dpot@4{
 		compatible = "ad5235";
 		reg = <4>;
 		spi-max-frequency = <1000000>;
+		spi-cpha;
+		spi-cpol;
+	};
+
+	dpot@5{
+		compatible = "ad5235";
+		reg = <5>;
+		spi-max-frequency = <1000000>;
+		spi-cpha;
+		spi-cpol;
+	};
+
+	dpot@6{
+		compatible = "ad5235";
+		reg = <6>;
+		spi-max-frequency = <1000000>;
+		spi-cpha;
+		spi-cpol;
 	};
 };
 
